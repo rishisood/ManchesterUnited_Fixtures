@@ -27,8 +27,6 @@ A static web application for tracking Manchester United fixtures across the 2026
 - `index.html` - application markup.
 - `styles.css` - responsive styling and dashboard layout.
 - `app.js` - fixture data, refresh logic, filters, dashboard rendering, and API normalization.
-- `netlify/functions/pl-api.js` - serverless proxy used to refresh Premier League/Pulse data without browser CORS blocks.
-- `netlify.toml` - Netlify deployment config.
 - `restore-pre-*.ps1` - local rollback scripts from development checkpoints.
 
 ## Running Locally
@@ -45,29 +43,6 @@ Then open:
 
 ```text
 http://127.0.0.1:5174/
-```
-
-When run as a plain static site, the app still opens and uses the seeded fixture data. Live refresh needs the serverless proxy because the Premier League/Pulse API does not allow browser requests from local or GitHub Pages origins.
-
-## Deployment
-
-GitHub Pages can host the static app, but it cannot run the refresh proxy. On GitHub Pages the page will load normally and fall back to seeded fixtures when live refresh is blocked.
-
-For a free deployment where live refresh works, use Netlify:
-
-1. Push this repo to GitHub.
-2. In Netlify, create a new site from the GitHub repo.
-3. Keep the publish directory as `.` and functions directory as `netlify/functions`.
-4. Deploy.
-
-The app automatically calls `/.netlify/functions/pl-api` before attempting the direct Premier League/Pulse API request.
-
-## Rollback
-
-To undo the proxy-refresh changes locally, run:
-
-```powershell
-.\restore-pre-proxy-refresh.ps1
 ```
 
 ## Data Sources

@@ -108,8 +108,6 @@ function createPendingTournament(name, id, index) {
 }
 
 const AUTO_REFRESH_ON_LOAD = true;
-const LIVE_API_ORIGIN = "https://footballapi.pulselive.com";
-const LIVE_API_PROXY = "/.netlify/functions/pl-api";
 const SEEDED_STANDINGS = [
   { position: 1, name: "Arsenal", shortName: "Arsenal", id: 1, opta: "t3", played: 0, gd: 0, points: 0 },
   { position: 2, name: "Aston Villa", shortName: "Aston Villa", id: 2, opta: "t7", played: 0, gd: 0, points: 0 },
@@ -562,7 +560,7 @@ async function refreshFixtures({ automatic = false } = {}) {
     });
     dataStatus.textContent = `Updated ${checkedAt}`;
   } catch (error) {
-    dataStatus.textContent = "Live refresh needs the serverless proxy. Showing seeded PL fixtures.";
+    dataStatus.textContent = "Live refresh blocked. Showing seeded PL fixtures.";
     fixtures = [...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
   } finally {
     refreshButton.disabled = false;
@@ -571,40 +569,13 @@ async function refreshFixtures({ automatic = false } = {}) {
   }
 }
 
-async function fetchLiveJson(pathAndQuery, { optional = false } = {}) {
-  const liveUrl = `${LIVE_API_ORIGIN}${pathAndQuery}`;
-  const attempts = liveFetchAttempts(liveUrl);
-  let lastError = null;
-
-  for (const requestUrl of attempts) {
-    try {
-      const response = await fetch(requestUrl);
-      if (!response.ok) {
-        lastError = new Error(`Live API returned ${response.status}`);
-        continue;
-      }
-      return response.json();
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  if (optional) return null;
-  throw lastError || new Error("Live API request failed");
-}
-
-function liveFetchAttempts(liveUrl) {
-  if (window.location.protocol === "http:" || window.location.protocol === "https:") {
-    const proxyUrl = new URL(LIVE_API_PROXY, window.location.origin);
-    proxyUrl.searchParams.set("url", liveUrl);
-    return [proxyUrl.toString(), liveUrl];
-  }
-
-  return [liveUrl];
-}
-
 async function fetchStandings() {
-  const payload = await fetchLiveJson("/football/standings?comps=1&compSeasons=841&altIds=true");
+  const response = await fetch(
+    "https://footballapi.pulselive.com/football/standings?comps=1&compSeasons=841&altIds=true",
+  );
+  if (!response.ok) throw new Error("Standings lookup failed");
+
+  const payload = await response.json();
   return (payload.tables || []).map((table) => ({
     gameweek: table.gameWeek || 0,
     entries: (table.entries || []).map((entry) => ({
@@ -621,12 +592,12 @@ async function fetchStandings() {
 }
 
 async function fetchTopScorer() {
-  const payload = await fetchLiveJson(
-    "/football/stats/ranked/players/goals?comps=1&compSeasons=841&page=0&pageSize=1&altIds=true",
-    { optional: true },
+  const response = await fetch(
+    "https://footballapi.pulselive.com/football/stats/ranked/players/goals?comps=1&compSeasons=841&page=0&pageSize=1&altIds=true",
   );
-  if (!payload) return null;
+  if (!response.ok) return null;
 
+  const payload = await response.json();
   const row = payload.stats?.content?.[0];
   if (!row) return null;
 
@@ -639,12 +610,12 @@ async function fetchTopScorer() {
 }
 
 async function fetchTopAssister() {
-  const payload = await fetchLiveJson(
-    "/football/stats/ranked/players/goal_assist?comps=1&compSeasons=841&page=0&pageSize=1&altIds=true",
-    { optional: true },
+  const response = await fetch(
+    "https://footballapi.pulselive.com/football/stats/ranked/players/goal_assist?comps=1&compSeasons=841&page=0&pageSize=1&altIds=true",
   );
-  if (!payload) return null;
+  if (!response.ok) return null;
 
+  const payload = await response.json();
   const row = payload.stats?.content?.[0];
   if (!row) return null;
 
@@ -675,7 +646,10 @@ async function fetchCompetitionFixtures(competition) {
     altIds: "true",
   });
 
-  const payload = await fetchLiveJson(`/football/fixtures?${params}`);
+  const response = await fetch(`https://footballapi.pulselive.com/football/fixtures?${params}`);
+  if (!response.ok) throw new Error(`Fixture lookup failed for ${competition.name}`);
+
+  const payload = await response.json();
   const detailed = await Promise.all(
     (payload.content || []).map(async (fixture) => {
       if (fixture.status !== "C") return fixture;
@@ -686,16 +660,20 @@ async function fetchCompetitionFixtures(competition) {
 }
 
 async function fetchFixtureDetail(fixtureId) {
-  return fetchLiveJson(`/football/fixtures/${fixtureId}?altIds=true`);
+  const response = await fetch(
+    `https://footballapi.pulselive.com/football/fixtures/${fixtureId}?altIds=true`,
+  );
+  if (!response.ok) throw new Error(`Fixture detail lookup failed for ${fixtureId}`);
+  return response.json();
 }
 
 async function findSeasonId(competition) {
-  const payload = await fetchLiveJson(
-    `/football/competitions/${competition.id}/compseasons?page=0&pageSize=80&altIds=true`,
-    { optional: true },
+  const response = await fetch(
+    `https://footballapi.pulselive.com/football/competitions/${competition.id}/compseasons?page=0&pageSize=80&altIds=true`,
   );
-  if (!payload) return null;
+  if (!response.ok) return null;
 
+  const payload = await response.json();
   const seasons = payload.content || [];
   const hinted = seasons.find((season) =>
     String(season.label).includes(competition.seasonLabelHint || "2026"),
