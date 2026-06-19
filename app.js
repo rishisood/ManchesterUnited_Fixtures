@@ -810,6 +810,7 @@ document.querySelectorAll(".filter").forEach((button) => {
     document.querySelectorAll(".filter").forEach((item) => item.classList.remove("is-active"));
     button.classList.add("is-active");
     activeCompetition = button.dataset.filter;
+    updateCompetitionTheme();
     renderMonthFilters();
     render();
   });
