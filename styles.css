@@ -40,15 +40,15 @@ body[data-competition-theme="champions-league"] {
 }
 
 body[data-competition-theme="fa-cup"] {
-  --theme-accent: #087f5b;
-  --theme-wash-a: rgba(8, 127, 91, 0.14);
-  --theme-wash-b: rgba(212, 160, 23, 0.13);
+  --theme-accent: #0b7a3b;
+  --theme-wash-a: rgba(11, 122, 59, 0.18);
+  --theme-wash-b: rgba(219, 166, 28, 0.16);
 }
 
 body[data-competition-theme="efl-cup"] {
-  --theme-accent: #8f2d56;
-  --theme-wash-a: rgba(143, 45, 86, 0.14);
-  --theme-wash-b: rgba(0, 109, 119, 0.12);
+  --theme-accent: #0067b1;
+  --theme-wash-a: rgba(0, 103, 177, 0.18);
+  --theme-wash-b: rgba(0, 174, 239, 0.14);
 }
 
 button,
