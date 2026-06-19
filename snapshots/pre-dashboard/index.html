@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manchester United Fixtures 2026/27</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="fixture-board" aria-labelledby="page-title">
+        <header class="topbar">
+          <div class="club-lockup">
+            <img
+              class="club-crest"
+              src="https://resources.premierleague.com/premierleague/badges/100/t1.png"
+              alt="Manchester United crest"
+            />
+            <div>
+              <p class="eyebrow">2026/27 fixture tracker</p>
+              <h1 id="page-title">Manchester United</h1>
+            </div>
+          </div>
+          <div class="sync-panel">
+            <p id="data-status">Seeded from Premier League feed</p>
+            <button id="refresh-button" type="button">Refresh fixtures</button>
+          </div>
+        </header>
+
+        <section class="summary-strip" aria-label="Fixture summary">
+          <article>
+            <strong id="total-count">38</strong>
+            <span>Total matches</span>
+          </article>
+          <article>
+            <strong id="home-count">19</strong>
+            <span>Home</span>
+          </article>
+          <article>
+            <strong id="away-count">19</strong>
+            <span>Away</span>
+          </article>
+          <article>
+            <strong id="next-match">22 Aug</strong>
+            <span>First fixture</span>
+          </article>
+        </section>
+
+        <nav class="filters" aria-label="Competition filters">
+          <button class="filter is-active" type="button" data-filter="all">All</button>
+          <button class="filter" type="button" data-filter="Premier League">
+            Premier League
+          </button>
+          <button class="filter" type="button" data-filter="UEFA Champions League">
+            Champions League
+          </button>
+          <button class="filter" type="button" data-filter="FA Cup">FA Cup</button>
+          <button class="filter" type="button" data-filter="EFL Cup">EFL Cup</button>
+        </nav>
+
+        <section class="view-tools" aria-label="View controls">
+          <label class="search-field">
+            <span>Search</span>
+            <input id="search-input" type="search" placeholder="Club, city, venue" />
+          </label>
+          <div class="toggle-group" aria-label="Home and away filters">
+            <button class="venue-filter is-active" type="button" data-venue-filter="all">
+              All venues
+            </button>
+            <button class="venue-filter" type="button" data-venue-filter="home">Home</button>
+            <button class="venue-filter" type="button" data-venue-filter="away">Away</button>
+          </div>
+        </section>
+
+        <section id="fixture-grid" class="fixture-grid" aria-live="polite"></section>
+      </section>
+    </main>
+
+    <template id="fixture-card-template">
+      <article class="fixture-card">
+        <div class="card-band"></div>
+        <div class="card-head">
+          <span class="competition-pill"></span>
+          <span class="venue-pill"></span>
+        </div>
+        <div class="match-date">
+          <strong></strong>
+          <span></span>
+        </div>
+        <div class="teams">
+          <div class="team">
+            <img alt="" />
+            <span></span>
+          </div>
+          <span class="versus">vs</span>
+          <div class="team">
+            <img alt="" />
+            <span></span>
+          </div>
+        </div>
+        <dl class="meta">
+          <div>
+            <dt>Venue</dt>
+            <dd class="venue"></dd>
+          </div>
+          <div>
+            <dt>Round</dt>
+            <dd class="round"></dd>
+          </div>
+        </dl>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>

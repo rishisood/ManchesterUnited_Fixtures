@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Manchester United Fixtures 2026/27</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="fixture-board" aria-labelledby="page-title">
+        <header class="topbar">
+          <div class="club-lockup">
+            <img
+              class="club-crest"
+              src="https://resources.premierleague.com/premierleague/badges/100/t1.png"
+              alt="Manchester United crest"
+            />
+            <div>
+              <p class="eyebrow">2026/27 fixture tracker</p>
+              <h1 id="page-title">Manchester United</h1>
+            </div>
+          </div>
+          <div class="sync-panel">
+            <p id="data-status">Seeded from Premier League feed</p>
+            <button id="refresh-button" type="button">Refresh fixtures</button>
+          </div>
+        </header>
+
+        <nav class="page-tabs" aria-label="Main views">
+          <button class="page-tab is-active" type="button" data-view="fixtures-view">
+            Fixtures
+          </button>
+          <button class="page-tab" type="button" data-view="dashboard-view">
+            Dashboard
+          </button>
+        </nav>
+
+        <section id="fixtures-view" class="app-view is-active">
+          <section class="summary-strip" aria-label="Fixture summary">
+            <article>
+              <strong id="total-count">38</strong>
+              <span>Total matches</span>
+            </article>
+            <article>
+              <strong id="home-count">19</strong>
+              <span>Home</span>
+            </article>
+            <article>
+              <strong id="away-count">19</strong>
+              <span>Away</span>
+            </article>
+            <article>
+              <strong id="next-match">22 Aug</strong>
+              <span>First fixture</span>
+            </article>
+          </section>
+
+          <div class="sticky-controls">
+            <nav class="filters" aria-label="Competition filters">
+              <div class="competition-filters">
+                <button class="filter is-active" type="button" data-filter="all">All</button>
+                <button class="filter" type="button" data-filter="Premier League">
+                  Premier League
+                </button>
+                <button class="filter" type="button" data-filter="UEFA Champions League">
+                  Champions League
+                </button>
+                <button class="filter" type="button" data-filter="FA Cup">FA Cup</button>
+                <button class="filter" type="button" data-filter="EFL Cup">EFL Cup</button>
+              </div>
+              <div class="filter-actions">
+                <button class="venue-filter is-active" type="button" data-venue-filter="all">
+                  All venues
+                </button>
+                <button class="venue-filter" type="button" data-venue-filter="home">Home</button>
+                <button class="venue-filter" type="button" data-venue-filter="away">Away</button>
+                <button id="completed-toggle" class="completed-toggle" type="button">
+                  Show completed
+                </button>
+              </div>
+            </nav>
+
+            <nav id="month-filters" class="month-filters" aria-label="Month filters"></nav>
+          </div>
+
+          <section id="fixture-grid" class="fixture-grid" aria-live="polite"></section>
+        </section>
+
+        <section id="dashboard-view" class="app-view dashboard-view" aria-label="Dashboard">
+          <section class="dashboard-grid">
+            <article class="dashboard-panel scorer-panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Goals</p>
+                  <h2>Highest Scorer</h2>
+                </div>
+              </header>
+              <div class="scorer-card">
+                <img id="top-scorer-photo" alt="" />
+                <div>
+                  <strong id="top-scorer-name">TBC</strong>
+                  <span id="top-scorer-meta">No 2026/27 goals recorded yet</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="dashboard-panel assister-panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Assists</p>
+                  <h2>Highest Assister</h2>
+                </div>
+              </header>
+              <div class="scorer-card">
+                <img id="top-assister-photo" alt="" />
+                <div>
+                  <strong id="top-assister-name">TBC</strong>
+                  <span id="top-assister-meta">No 2026/27 assists recorded yet</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="dashboard-panel table-panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Premier League</p>
+                  <h2>
+                    <a href="https://www.premierleague.com/en/tables" target="_blank" rel="noreferrer">
+                      Table
+                    </a>
+                  </h2>
+                </div>
+                <span id="table-round">GW 0</span>
+              </header>
+              <div class="table-wrap">
+                <table class="league-table">
+                  <thead>
+                    <tr>
+                      <th>Pos</th>
+                      <th>Club</th>
+                      <th>P</th>
+                      <th>GD</th>
+                      <th>Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody id="league-table-body"></tbody>
+                </table>
+              </div>
+            </article>
+
+            <article class="dashboard-panel chart-panel">
+              <header class="panel-head">
+                <div>
+                  <p class="eyebrow">Manchester United</p>
+                  <h2>Weekly Position</h2>
+                </div>
+                <span id="position-chip">TBC</span>
+              </header>
+              <div id="position-chart" class="position-chart"></div>
+            </article>
+          </section>
+        </section>
+      </section>
+    </main>
+
+    <template id="fixture-card-template">
+      <article class="fixture-card">
+        <div class="card-band"></div>
+        <div class="card-head">
+          <span class="competition-pill"></span>
+          <span class="venue-pill"></span>
+        </div>
+        <div class="match-date">
+          <strong></strong>
+          <span></span>
+        </div>
+        <div class="teams">
+          <div class="team">
+            <span class="team-score"></span>
+            <span class="team-identity">
+              <img alt="" />
+              <span class="team-name"></span>
+            </span>
+          </div>
+          <span class="versus">vs</span>
+          <div class="team">
+            <span class="team-score"></span>
+            <span class="team-identity">
+              <img alt="" />
+              <span class="team-name"></span>
+            </span>
+          </div>
+        </div>
+        <dl class="meta">
+          <div>
+            <dt>Venue</dt>
+            <dd class="venue"></dd>
+          </div>
+          <div>
+            <dt>Round</dt>
+            <dd class="round"></dd>
+          </div>
+          <div>
+            <dt>Watch</dt>
+            <dd class="streaming"></dd>
+          </div>
+        </dl>
+        <section class="match-stats" aria-label="Match stats">
+          <div>
+            <h3>Status</h3>
+            <p class="match-status"></p>
+          </div>
+          <div>
+            <h3>Scorers</h3>
+            <ul class="scorers"></ul>
+          </div>
+          <div>
+            <h3>Assists</h3>
+            <ul class="assists"></ul>
+          </div>
+        </section>
+      </article>
+    </template>
+
+    <script src="app.js"></script>
+  </body>
+</html>
