@@ -172,6 +172,10 @@ let activeVenue = "all";
 let activeMonth = "all";
 let activeDashboardTable = "premier-league";
 let showCompleted = false;
+let isRefreshing = false;
+let pullStartY = null;
+let pullDistance = 0;
+let pullReady = false;
 
 const COMPETITION_THEMES = {
   "Premier League": "premier-league",
@@ -179,6 +183,8 @@ const COMPETITION_THEMES = {
   "FA Cup": "fa-cup",
   "EFL Cup": "efl-cup",
 };
+
+const PULL_REFRESH_THRESHOLD = 76;
 
 const grid = document.querySelector("#fixture-grid");
 const template = document.querySelector("#fixture-card-template");
@@ -471,13 +477,13 @@ function streamingInfo(competition) {
       name: "SonyLIV",
       initials: "SL",
       className: "sony",
-      logo: "sonyliv.jpg",
+      logo: "sonyliv.png",
     },
     "FA Cup": {
       name: "SonyLIV",
       initials: "SL",
       className: "sony",
-      logo: "sonyliv.jpg",
+      logo: "sonyliv.png",
     },
     "EFL Cup": {
       name: "FanCode",
@@ -712,6 +718,8 @@ function setPlayerPhoto(img, src, alt) {
 }
 
 async function refreshFixtures({ automatic = false } = {}) {
+  if (isRefreshing) return;
+  isRefreshing = true;
   refreshButton.disabled = true;
   dataStatus.textContent = automatic ? "Checking latest fixtures..." : "Checking tournament feeds...";
 
@@ -736,6 +744,7 @@ async function refreshFixtures({ automatic = false } = {}) {
     dataStatus.textContent = "Live refresh needs the serverless proxy. Showing seeded PL fixtures.";
     fixtures = [...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
   } finally {
+    isRefreshing = false;
     refreshButton.disabled = false;
     renderMonthFilters();
     render();
@@ -1027,6 +1036,72 @@ completedToggle.addEventListener("click", () => {
 });
 
 refreshButton.addEventListener("click", () => refreshFixtures());
+
+function isPullRefreshAvailable() {
+  return (
+    window.matchMedia("(max-width: 1180px)").matches &&
+    ("ontouchstart" in window || navigator.maxTouchPoints > 0)
+  );
+}
+
+function isPageScrolledToTop() {
+  const scroller = document.scrollingElement || document.documentElement;
+  return scroller.scrollTop <= 0;
+}
+
+function setupPullToRefresh() {
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      if (!isPullRefreshAvailable() || !isPageScrolledToTop() || event.touches.length !== 1) {
+        pullStartY = null;
+        return;
+      }
+
+      pullStartY = event.touches[0].clientY;
+      pullDistance = 0;
+      pullReady = false;
+    },
+    { passive: true },
+  );
+
+  document.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!isPullRefreshAvailable() || event.touches.length !== 1) return;
+      if (!isPageScrolledToTop()) {
+        pullStartY = null;
+        pullDistance = 0;
+        pullReady = false;
+        return;
+      }
+
+      if (pullStartY === null) {
+        pullStartY = event.touches[0].clientY;
+      }
+
+      pullDistance = event.touches[0].clientY - pullStartY;
+      pullReady = pullDistance >= PULL_REFRESH_THRESHOLD;
+    },
+    { passive: true },
+  );
+
+  document.addEventListener(
+    "touchend",
+    () => {
+      if (pullReady && !isRefreshing) {
+        refreshFixtures({ automatic: true });
+      }
+
+      pullStartY = null;
+      pullDistance = 0;
+      pullReady = false;
+    },
+    { passive: true },
+  );
+}
+
+setupPullToRefresh();
 
 completedToggle.classList.toggle("is-active", showCompleted);
 completedToggle.textContent = showCompleted ? "Hide completed" : "Show completed";
