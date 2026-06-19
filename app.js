@@ -186,11 +186,11 @@ function parseDateParts(label) {
 }
 
 function formatIstDateParts(fixture) {
-  if (!fixture.timestamp || fixture.timestamp >= Number.MAX_SAFE_INTEGER) {
+  const date = dateFromFixture(fixture);
+  if (!date) {
     return parseDateParts(fixture.date);
   }
 
-  const date = new Date(fixture.timestamp);
   return {
     primary: new Intl.DateTimeFormat("en-IN", {
       weekday: "short",
@@ -209,9 +209,10 @@ function formatIstDateParts(fixture) {
 }
 
 function dateFromFixture(fixture) {
-  return Number.isFinite(fixture.timestamp) && fixture.timestamp < Number.MAX_SAFE_INTEGER
-    ? new Date(fixture.timestamp)
-    : null;
+  const timestamp = Number(fixture.timestamp);
+  if (!Number.isFinite(timestamp) || timestamp >= 8640000000000000) return null;
+  const date = new Date(timestamp);
+  return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function monthKey(fixture) {
@@ -243,7 +244,7 @@ function availableMonthKeys() {
     new Set(
       fixtures
         .filter((fixture) => activeCompetition === "all" || fixture.competition === activeCompetition)
-        .filter((fixture) => activeVenue === "all" || fixture.homeAway === activeVenue)
+        .filter(matchesActiveVenue)
         .filter((fixture) => showCompleted || !isCompleted(fixture))
         .sort((a, b) => a.timestamp - b.timestamp)
         .map(monthKey),
@@ -274,16 +275,50 @@ function renderMonthFilters() {
   });
 }
 
+function hasRealFixturesInActiveCompetition() {
+  return fixtures.some((fixture) => fixture.competition === activeCompetition && !fixture.pending);
+}
+
+function pendingFixtureForCompetition(competitionName) {
+  return PENDING_TOURNAMENTS.find((fixture) => fixture.competition === competitionName) || null;
+}
+
+function realFixturesForCompetition(competitionName) {
+  return fixtures.filter((fixture) => fixture.competition === competitionName && !fixture.pending);
+}
+
+function matchesActiveVenue(fixture) {
+  return fixture.pending || activeVenue === "all" || fixture.homeAway === activeVenue;
+}
+
+function updateVenueFilterStates() {
+  const hasFixtures = hasRealFixturesInActiveCompetition();
+  document.querySelectorAll(".venue-filter").forEach((button) => {
+    button.disabled = !hasFixtures;
+    button.classList.toggle("is-disabled", !hasFixtures);
+  });
+}
+
 function render() {
   updateCompetitionTheme();
-  const filtered = fixtures
-    .filter((fixture) => activeCompetition === "all" || fixture.competition === activeCompetition)
-    .filter((fixture) => activeVenue === "all" || fixture.homeAway === activeVenue)
-    .filter((fixture) => activeMonth === "all" || String(monthKey(fixture)) === String(activeMonth))
-    .filter((fixture) => showCompleted || !isCompleted(fixture))
-    .sort((a, b) => a.timestamp - b.timestamp);
+  updateVenueFilterStates();
+  grid.replaceChildren();
 
-  grid.innerHTML = "";
+  const selectedCompetition = activeCompetition;
+  const pendingFixture = pendingFixtureForCompetition(selectedCompetition);
+  const realCompetitionFixtures = realFixturesForCompetition(selectedCompetition);
+  let filtered;
+
+  if (pendingFixture && !realCompetitionFixtures.length) {
+    filtered = [pendingFixture];
+  } else {
+    filtered = fixtures
+      .filter((fixture) => selectedCompetition === "all" || fixture.competition === selectedCompetition)
+      .filter(matchesActiveVenue)
+      .filter((fixture) => activeMonth === "all" || String(monthKey(fixture)) === String(activeMonth))
+      .filter((fixture) => showCompleted || !isCompleted(fixture))
+      .sort((a, b) => a.timestamp - b.timestamp);
+  }
 
   if (!filtered.length) {
     grid.innerHTML = `<div class="empty-state">No fixtures match the current filters.</div>`;
@@ -298,10 +333,32 @@ function render() {
 }
 
 function updateCompetitionTheme() {
-  const selectedCompetition =
-    document.querySelector(".filter.is-active")?.dataset.filter || activeCompetition;
-  activeCompetition = selectedCompetition;
-  document.body.dataset.competitionTheme = COMPETITION_THEMES[selectedCompetition] || "premier-league";
+  document.body.dataset.competitionTheme = COMPETITION_THEMES[activeCompetition] || "premier-league";
+}
+
+function syncVenueButtons() {
+  document.querySelectorAll(".venue-filter").forEach((button) => {
+    const isActive = button.dataset.venueFilter === activeVenue;
+    button.classList.toggle("is-active", isActive);
+  });
+}
+
+function syncCompetitionButtons() {
+  document.querySelectorAll(".filter").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.filter === activeCompetition);
+  });
+}
+
+function setActiveCompetition(competitionName) {
+  grid.replaceChildren();
+  activeCompetition = competitionName;
+  activeMonth = "all";
+  activeVenue = "all";
+  syncCompetitionButtons();
+  syncVenueButtons();
+  updateCompetitionTheme();
+  renderMonthFilters();
+  render();
 }
 
 function createCard(fixture) {
@@ -352,19 +409,45 @@ function isCompleted(fixture) {
 
 function streamingInfo(competition) {
   const services = {
-    "Premier League": { name: "JioHotstar", initials: "JH", className: "jio" },
-    "UEFA Champions League": { name: "SonyLIV", initials: "SL", className: "sony" },
-    "EFL Cup": { name: "FanCode", initials: "FC", className: "fancode" },
-    "FA Cup": { name: "TBC", initials: "TBC", className: "tbc" },
+    "Premier League": {
+      name: "JioHotstar",
+      initials: "JH",
+      className: "jio",
+      logo: "https://www.hotstar.com/favicon.ico",
+    },
+    "UEFA Champions League": {
+      name: "SonyLIV",
+      initials: "SL",
+      className: "sony",
+      logo: "sonyliv.jpg",
+    },
+    "FA Cup": {
+      name: "SonyLIV",
+      initials: "SL",
+      className: "sony",
+      logo: "sonyliv.jpg",
+    },
+    "EFL Cup": {
+      name: "FanCode",
+      initials: "FC",
+      className: "fancode",
+      logo: "fc.jpg",
+    },
   };
   return services[competition] || { name: "TBC", initials: "TBC", className: "tbc" };
 }
 
 function streamingMarkup(competition) {
   const service = streamingInfo(competition);
+  const logo = service.logo
+    ? `<img src="${service.logo}" alt="" onerror="this.remove()" />`
+    : "";
   return `
     <span class="streaming-badge">
-      <span class="streaming-icon ${service.className}" aria-hidden="true">${service.initials}</span>
+      <span class="streaming-icon ${service.className}" aria-hidden="true">
+        ${logo}
+        <span>${service.initials}</span>
+      </span>
       <span>${service.name}</span>
     </span>
   `;
@@ -813,15 +896,15 @@ document.querySelectorAll(".filter").forEach((button) => {
   button.addEventListener("click", () => {
     document.querySelectorAll(".filter").forEach((item) => item.classList.remove("is-active"));
     button.classList.add("is-active");
-    activeCompetition = button.dataset.filter;
-    updateCompetitionTheme();
-    renderMonthFilters();
-    render();
+    setActiveCompetition(button.dataset.filter);
   });
 });
 
 document.querySelectorAll(".venue-filter").forEach((button) => {
   button.addEventListener("click", () => {
+    // Prevent clicking disabled venue filters
+    if (button.disabled) return;
+    
     document
       .querySelectorAll(".venue-filter")
       .forEach((item) => item.classList.remove("is-active"));
@@ -857,6 +940,7 @@ completedToggle.textContent = showCompleted ? "Hide completed" : "Show completed
 
 renderMonthFilters();
 render();
+updateVenueFilterStates();
 
 if (AUTO_REFRESH_ON_LOAD) {
   refreshFixtures({ automatic: true });
