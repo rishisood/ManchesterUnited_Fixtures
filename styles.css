@@ -123,7 +123,7 @@ button {
   margin: 0 0 4px;
   color: var(--theme-accent);
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -171,7 +171,7 @@ h1 {
   border-radius: 8px;
   background: rgba(255, 253, 248, 0.74);
   color: var(--ink);
-  font-weight: 800;
+  font-weight: 600;
   transition:
     transform 180ms ease,
     border-color 180ms ease,
@@ -264,7 +264,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   display: block;
   margin-top: 8px;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .filters,
@@ -392,7 +392,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   border-radius: 999px;
   padding: 6px 9px;
   font-size: 0.72rem;
-  font-weight: 900;
+  font-weight: 600;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -430,7 +430,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   display: block;
   margin-top: 4px;
   color: var(--muted);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 .teams {
@@ -455,7 +455,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   background: rgba(246, 244, 238, 0.62);
   padding: 7px 9px;
   text-align: left;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .team-score {
@@ -467,7 +467,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   background: var(--ink);
   color: white;
   font-size: 1.08rem;
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .team-score.is-pending {
@@ -497,7 +497,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
 
 .versus {
   color: var(--muted);
-  font-weight: 900;
+  font-weight: 600;
   text-align: center;
 }
 
@@ -519,14 +519,14 @@ body[data-competition-theme="premier-league"] .sticky-controls {
 .meta dt {
   color: var(--muted);
   font-size: 0.72rem;
-  font-weight: 900;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
 .meta dd {
   margin: 2px 0 0;
   overflow-wrap: anywhere;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .streaming-badge {
@@ -544,7 +544,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   background: var(--ink);
   color: white;
   font-size: 0.68rem;
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .streaming-icon.jio {
@@ -582,7 +582,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   margin: 0 0 3px;
   color: var(--muted);
   font-size: 0.72rem;
-  font-weight: 900;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -590,7 +590,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
 .match-stats ul {
   margin: 0;
   padding: 0;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .match-stats ul {
@@ -653,7 +653,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   color: var(--united-red);
   padding: 7px 10px;
   font-size: 0.8rem;
-  font-weight: 900;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -687,13 +687,14 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   background: #f4efe5;
   color: var(--muted);
   font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
 .league-table tr.is-united {
   background: rgba(199, 1, 1, 0.12);
   color: var(--united-red);
-  font-weight: 950;
+  font-weight: 700;
 }
 
 .club-cell {
@@ -729,7 +730,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
 .chart-note {
   margin: 0;
   color: var(--muted);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .scorer-card {
@@ -761,7 +762,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   margin-top: 5px;
   color: var(--muted);
   font-size: 0.9rem;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .empty-state {
@@ -771,7 +772,7 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   background: rgba(255, 253, 248, 0.72);
   padding: 24px;
   color: var(--muted);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 @media (max-width: 1180px) {
@@ -1096,6 +1097,23 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   .completed-toggle {
     min-width: 0;
   }
+}
+
+/* Footer and Attribution */
+.app-footer {
+  margin-top: 40px;
+  padding: 24px;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 253, 248, 0.5);
+  text-align: center;
+}
+
+.attribution {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1.4;
+  font-weight: 500;
 }
 
 @media (max-width: 420px) {
