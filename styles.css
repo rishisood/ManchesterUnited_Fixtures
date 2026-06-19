@@ -10,6 +10,9 @@
   --blue: #2454a6;
   --card: #fffdf8;
   --shadow: 0 22px 60px rgba(23, 23, 23, 0.14);
+  --theme-accent: var(--united-red);
+  --theme-wash-a: rgba(199, 1, 1, 0.11);
+  --theme-wash-b: rgba(0, 109, 119, 0.13);
 }
 
 * {
@@ -20,13 +23,32 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    linear-gradient(135deg, rgba(199, 1, 1, 0.11), transparent 34%),
-    linear-gradient(315deg, rgba(0, 109, 119, 0.13), transparent 34%),
+    linear-gradient(135deg, var(--theme-wash-a), transparent 34%),
+    linear-gradient(315deg, var(--theme-wash-b), transparent 34%),
     var(--paper);
   color: var(--ink);
   font-family:
     "Aptos Display", "Aptos", -apple-system, BlinkMacSystemFont, "SF Pro Display",
     "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  transition: background 260ms ease;
+}
+
+body[data-competition-theme="champions-league"] {
+  --theme-accent: #2149c9;
+  --theme-wash-a: rgba(33, 73, 201, 0.15);
+  --theme-wash-b: rgba(90, 41, 174, 0.12);
+}
+
+body[data-competition-theme="fa-cup"] {
+  --theme-accent: #087f5b;
+  --theme-wash-a: rgba(8, 127, 91, 0.14);
+  --theme-wash-b: rgba(212, 160, 23, 0.13);
+}
+
+body[data-competition-theme="efl-cup"] {
+  --theme-accent: #8f2d56;
+  --theme-wash-a: rgba(143, 45, 86, 0.14);
+  --theme-wash-b: rgba(0, 109, 119, 0.12);
 }
 
 button,
@@ -82,7 +104,7 @@ button {
 
 .eyebrow {
   margin: 0 0 4px;
-  color: var(--united-red);
+  color: var(--theme-accent);
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0;
@@ -177,8 +199,8 @@ h1 {
   margin-bottom: 16px;
   padding-top: 8px;
   background:
-    linear-gradient(135deg, rgba(199, 1, 1, 0.11), transparent 34%),
-    linear-gradient(315deg, rgba(0, 109, 119, 0.13), transparent 34%),
+    linear-gradient(135deg, var(--theme-wash-a), transparent 34%),
+    linear-gradient(315deg, var(--theme-wash-b), transparent 34%),
     var(--paper);
   border-bottom: 1px solid var(--line);
   box-shadow: 0 18px 28px rgba(23, 23, 23, 0.08);
@@ -243,8 +265,8 @@ h1 {
 .filter.is-active,
 .venue-filter.is-active,
 .month-filter.is-active {
-  background: var(--united-red);
-  border-color: var(--united-red);
+  background: var(--theme-accent);
+  border-color: var(--theme-accent);
   color: white;
 }
 

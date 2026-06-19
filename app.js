@@ -142,6 +142,13 @@ let activeVenue = "all";
 let activeMonth = "all";
 let showCompleted = false;
 
+const COMPETITION_THEMES = {
+  "Premier League": "premier-league",
+  "UEFA Champions League": "champions-league",
+  "FA Cup": "fa-cup",
+  "EFL Cup": "efl-cup",
+};
+
 const grid = document.querySelector("#fixture-grid");
 const template = document.querySelector("#fixture-card-template");
 const dataStatus = document.querySelector("#data-status");
@@ -267,6 +274,7 @@ function renderMonthFilters() {
 }
 
 function render() {
+  updateCompetitionTheme();
   const filtered = fixtures
     .filter((fixture) => activeCompetition === "all" || fixture.competition === activeCompetition)
     .filter((fixture) => activeVenue === "all" || fixture.homeAway === activeVenue)
@@ -286,6 +294,10 @@ function render() {
   filtered.forEach((fixture) => grid.appendChild(createCard(fixture)));
   updateSummary(filtered);
   renderDashboard();
+}
+
+function updateCompetitionTheme() {
+  document.body.dataset.competitionTheme = COMPETITION_THEMES[activeCompetition] || "premier-league";
 }
 
 function createCard(fixture) {
