@@ -17,25 +17,24 @@ const COMPETITIONS = [
   {
     name: "UEFA Champions League",
     id: 2,
-    seasonLabelHint: "2026",
     seeded: false,
     source: "Premier League/Pulse competition feed",
   },
   {
     name: "FA Cup",
     id: 4,
-    seasonLabelHint: "2026",
     seeded: false,
     source: "Premier League/Pulse competition feed",
   },
   {
     name: "EFL Cup",
     id: 5,
-    seasonLabelHint: "2026",
     seeded: false,
     source: "Premier League/Pulse competition feed",
   },
 ];
+
+const TARGET_SEASON_PATTERN = /(^|[^0-9])2026\s*[/-]\s*(?:2027|27)(?=$|[^0-9])/;
 
 const SEEDED_FIXTURES = [
   { id: 128926, matchweek: 1, date: "Sat 22 Aug 2026, 12:30 BST", timestamp: 1787398200000, home: "Hull City", away: "Manchester United", opponent: "Hull City", opponentShort: "Hull", opponentAbbr: "HUL", opponentId: 41, opponentOpta: "t88", venue: "MKM Stadium", city: "Hull", homeAway: "away", competition: "Premier League", competitionId: 1, seasonId: 841 },
@@ -110,28 +109,59 @@ function createPendingTournament(name, id, index) {
 const AUTO_REFRESH_ON_LOAD = true;
 const LIVE_API_ORIGIN = "https://footballapi.pulselive.com";
 const LIVE_API_PROXY = "/.netlify/functions/pl-api";
+const CHAMPIONS_LEAGUE_LOGO = "champions-league.svg";
 const SEEDED_STANDINGS = [
-  { position: 1, name: "Arsenal", shortName: "Arsenal", id: 1, opta: "t3", played: 0, gd: 0, points: 0 },
-  { position: 2, name: "Aston Villa", shortName: "Aston Villa", id: 2, opta: "t7", played: 0, gd: 0, points: 0 },
-  { position: 3, name: "Bournemouth", shortName: "Bournemouth", id: 127, opta: "t91", played: 0, gd: 0, points: 0 },
-  { position: 4, name: "Brentford", shortName: "Brentford", id: 130, opta: "t94", played: 0, gd: 0, points: 0 },
-  { position: 5, name: "Brighton & Hove Albion", shortName: "Brighton", id: 131, opta: "t36", played: 0, gd: 0, points: 0 },
-  { position: 6, name: "Chelsea", shortName: "Chelsea", id: 4, opta: "t8", played: 0, gd: 0, points: 0 },
-  { position: 7, name: "Coventry City", shortName: "Coventry", id: 5, opta: "t9", played: 0, gd: 0, points: 0 },
-  { position: 8, name: "Crystal Palace", shortName: "Crystal Palace", id: 6, opta: "t31", played: 0, gd: 0, points: 0 },
-  { position: 9, name: "Everton", shortName: "Everton", id: 7, opta: "t11", played: 0, gd: 0, points: 0 },
-  { position: 10, name: "Fulham", shortName: "Fulham", id: 34, opta: "t54", played: 0, gd: 0, points: 0 },
-  { position: 11, name: "Hull City", shortName: "Hull", id: 41, opta: "t88", played: 0, gd: 0, points: 0 },
-  { position: 12, name: "Ipswich Town", shortName: "Ipswich", id: 8, opta: "t40", played: 0, gd: 0, points: 0 },
-  { position: 13, name: "Leeds United", shortName: "Leeds", id: 9, opta: "t2", played: 0, gd: 0, points: 0 },
-  { position: 14, name: "Liverpool", shortName: "Liverpool", id: 10, opta: "t14", played: 0, gd: 0, points: 0 },
-  { position: 15, name: "Manchester City", shortName: "Man City", id: 11, opta: "t43", played: 0, gd: 0, points: 0 },
-  { position: 16, name: "Manchester United", shortName: "Man Utd", id: 12, opta: "t1", played: 0, gd: 0, points: 0 },
-  { position: 17, name: "Newcastle United", shortName: "Newcastle", id: 23, opta: "t4", played: 0, gd: 0, points: 0 },
-  { position: 18, name: "Nottingham Forest", shortName: "Nott'm Forest", id: 15, opta: "t17", played: 0, gd: 0, points: 0 },
-  { position: 19, name: "Sunderland", shortName: "Sunderland", id: 29, opta: "t56", played: 0, gd: 0, points: 0 },
-  { position: 20, name: "Tottenham Hotspur", shortName: "Spurs", id: 21, opta: "t6", played: 0, gd: 0, points: 0 },
+  createStandingEntry(1, "Arsenal", "Arsenal", 1, "t3"),
+  createStandingEntry(2, "Aston Villa", "Aston Villa", 2, "t7"),
+  createStandingEntry(3, "Bournemouth", "Bournemouth", 127, "t91"),
+  createStandingEntry(4, "Brentford", "Brentford", 130, "t94"),
+  createStandingEntry(5, "Brighton & Hove Albion", "Brighton", 131, "t36"),
+  createStandingEntry(6, "Chelsea", "Chelsea", 4, "t8"),
+  createStandingEntry(7, "Coventry City", "Coventry", 5, "t9"),
+  createStandingEntry(8, "Crystal Palace", "Crystal Palace", 6, "t31"),
+  createStandingEntry(9, "Everton", "Everton", 7, "t11"),
+  createStandingEntry(10, "Fulham", "Fulham", 34, "t54"),
+  createStandingEntry(11, "Hull City", "Hull", 41, "t88"),
+  createStandingEntry(12, "Ipswich Town", "Ipswich", 8, "t40"),
+  createStandingEntry(13, "Leeds United", "Leeds", 9, "t2"),
+  createStandingEntry(14, "Liverpool", "Liverpool", 10, "t14"),
+  createStandingEntry(15, "Manchester City", "Man City", 11, "t43"),
+  createStandingEntry(16, "Manchester United", "Man Utd", 12, "t1"),
+  createStandingEntry(17, "Newcastle United", "Newcastle", 23, "t4"),
+  createStandingEntry(18, "Nottingham Forest", "Nott'm Forest", 15, "t17"),
+  createStandingEntry(19, "Sunderland", "Sunderland", 29, "t56"),
+  createStandingEntry(20, "Tottenham Hotspur", "Spurs", 21, "t6"),
 ];
+
+const CHAMPIONS_LEAGUE_CLUBS = [
+  { name: "Arsenal", crest: crestUrl("t3") },
+  { name: "Atletico Madrid", crest: "https://crests.football-data.org/78.png" },
+  { name: "Barcelona", crest: "https://crests.football-data.org/81.png" },
+  { name: "Bayern Munich", crest: "https://crests.football-data.org/5.png" },
+  { name: "Borussia Dortmund", crest: "https://crests.football-data.org/4.png" },
+  { name: "Feyenoord", crest: "https://crests.football-data.org/675.png" },
+  { name: "Galatasaray", crest: "https://a.espncdn.com/i/teamlogos/soccer/500/432.png" },
+  { name: "Inter Milan", crest: "https://crests.football-data.org/108.png" },
+  { name: "Lens", crest: "https://crests.football-data.org/546.png" },
+  { name: "Manchester City", crest: crestUrl("t43") },
+  { name: "Manchester United", crest: crestUrl(UNITED.opta), id: UNITED.id, opta: UNITED.opta },
+  { name: "Paris Saint-Germain", crest: "https://crests.football-data.org/524.png" },
+  { name: "Porto", crest: "https://crests.football-data.org/503.png" },
+  { name: "PSV Eindhoven", crest: "https://crests.football-data.org/674.png" },
+  { name: "RB Leipzig", crest: "https://crests.football-data.org/721.png" },
+  { name: "Real Madrid", crest: "https://crests.football-data.org/86.png" },
+  { name: "Shakhtar Donetsk", crest: "https://a.espncdn.com/i/teamlogos/soccer/500/493.png" },
+  { name: "Villarreal", crest: "https://crests.football-data.org/94.png" },
+];
+
+const CHAMPIONS_LEAGUE_STANDINGS = [
+  ...CHAMPIONS_LEAGUE_CLUBS,
+  ...Array.from({ length: 18 }, () => ({ name: "TBC", crest: CHAMPIONS_LEAGUE_LOGO })),
+].map((club, index) =>
+  createStandingEntry(index + 1, club.name, club.name, club.id || null, club.opta || null, {
+    crest: club.crest,
+  }),
+);
 
 let fixtures = [...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
 let standingsHistory = [{ gameweek: 0, entries: SEEDED_STANDINGS }];
@@ -140,6 +170,7 @@ let topAssister = null;
 let activeCompetition = "Premier League";
 let activeVenue = "all";
 let activeMonth = "all";
+let activeDashboardTable = "premier-league";
 let showCompleted = false;
 
 const COMPETITION_THEMES = {
@@ -157,6 +188,8 @@ const completedToggle = document.querySelector("#completed-toggle");
 const monthFilters = document.querySelector("#month-filters");
 const tableBody = document.querySelector("#league-table-body");
 const tableRound = document.querySelector("#table-round");
+const dashboardTableLabel = document.querySelector("#dashboard-table-label");
+const dashboardTableLink = document.querySelector("#dashboard-table-link");
 const positionChip = document.querySelector("#position-chip");
 const positionChart = document.querySelector("#position-chart");
 const topScorerName = document.querySelector("#top-scorer-name");
@@ -165,6 +198,25 @@ const topScorerPhoto = document.querySelector("#top-scorer-photo");
 const topAssisterName = document.querySelector("#top-assister-name");
 const topAssisterMeta = document.querySelector("#top-assister-meta");
 const topAssisterPhoto = document.querySelector("#top-assister-photo");
+
+function createStandingEntry(position, name, shortName, id = null, opta = null, stats = {}) {
+  return {
+    position,
+    name,
+    shortName,
+    id,
+    opta,
+    crest: stats.crest ?? null,
+    played: stats.played ?? 0,
+    won: stats.won ?? 0,
+    drawn: stats.drawn ?? 0,
+    lost: stats.lost ?? 0,
+    goalsFor: stats.goalsFor ?? 0,
+    goalsAgainst: stats.goalsAgainst ?? 0,
+    gd: stats.gd ?? 0,
+    points: stats.points ?? 0,
+  };
+}
 
 function crestUrl(optaId, size = 70) {
   const fallback = "https://resources.premierleague.com/premierleague/badges/70/default.png";
@@ -513,27 +565,47 @@ function latestStandings() {
 }
 
 function renderLeagueTable() {
-  const table = latestStandings();
-  tableRound.textContent = `GW ${table.gameweek}`;
+  const table =
+    activeDashboardTable === "champions-league"
+      ? { gameweek: null, entries: CHAMPIONS_LEAGUE_STANDINGS }
+      : latestStandings();
+  const isChampionsLeague = activeDashboardTable === "champions-league";
+  dashboardTableLabel.textContent = isChampionsLeague ? "Champions League" : "Premier League";
+  dashboardTableLink.href = isChampionsLeague
+    ? "https://www.uefa.com/uefachampionsleague/standings/"
+    : "https://www.premierleague.com/en/tables";
+  tableRound.textContent = isChampionsLeague ? "MD 0" : `GW ${table.gameweek}`;
   tableBody.innerHTML = "";
 
   table.entries.forEach((entry) => {
     const row = document.createElement("tr");
     if (entry.id === UNITED.id) row.classList.add("is-united");
+    if (entry.name === "TBC") row.classList.add("is-tbc");
     row.innerHTML = `
       <td>${entry.position}</td>
       <td>
         <span class="club-cell">
-          <img src="${crestUrl(entry.opta)}" alt="${entry.shortName} crest" />
+          ${standingCrestMarkup(entry)}
           <span>${entry.shortName}</span>
         </span>
       </td>
       <td>${entry.played}</td>
+      <td>${entry.won}</td>
+      <td>${entry.drawn}</td>
+      <td>${entry.lost}</td>
+      <td>${entry.goalsFor}</td>
+      <td>${entry.goalsAgainst}</td>
       <td>${entry.gd}</td>
       <td>${entry.points}</td>
     `;
     tableBody.appendChild(row);
   });
+}
+
+function standingCrestMarkup(entry) {
+  const src = entry.crest || (entry.opta ? crestUrl(entry.opta) : CHAMPIONS_LEAGUE_LOGO);
+  const alt = entry.name === "TBC" ? "Champions League logo" : `${entry.shortName} crest`;
+  return `<img src="${src}" alt="${alt}" loading="lazy" onerror="this.src='${CHAMPIONS_LEAGUE_LOGO}'" />`;
 }
 
 function unitedPositionHistory() {
@@ -706,16 +778,25 @@ async function fetchStandings() {
   const payload = await fetchLiveJson("/football/standings?comps=1&compSeasons=841&altIds=true");
   return (payload.tables || []).map((table) => ({
     gameweek: table.gameWeek || 0,
-    entries: (table.entries || []).map((entry) => ({
-      position: entry.position,
-      name: entry.team?.name || "Unknown club",
-      shortName: entry.team?.shortName || entry.team?.name || "Unknown",
-      id: entry.team?.id,
-      opta: entry.team?.altIds?.opta,
-      played: entry.overall?.played ?? 0,
-      gd: entry.overall?.goalsDifference ?? 0,
-      points: entry.overall?.points ?? 0,
-    })),
+    entries: (table.entries || []).map((entry) =>
+      createStandingEntry(
+        entry.position,
+        entry.team?.name || "Unknown club",
+        entry.team?.shortName || entry.team?.name || "Unknown",
+        entry.team?.id,
+        entry.team?.altIds?.opta,
+        {
+          played: entry.overall?.played ?? 0,
+          won: entry.overall?.won ?? entry.overall?.wins ?? 0,
+          drawn: entry.overall?.drawn ?? entry.overall?.draws ?? 0,
+          lost: entry.overall?.lost ?? entry.overall?.losses ?? 0,
+          goalsFor: entry.overall?.goalsFor ?? entry.overall?.goalsScored ?? 0,
+          goalsAgainst: entry.overall?.goalsAgainst ?? entry.overall?.goalsConceded ?? 0,
+          gd: entry.overall?.goalsDifference ?? 0,
+          points: entry.overall?.points ?? 0,
+        },
+      ),
+    ),
   }));
 }
 
@@ -796,10 +877,13 @@ async function findSeasonId(competition) {
   if (!payload) return null;
 
   const seasons = payload.content || [];
-  const hinted = seasons.find((season) =>
-    String(season.label).includes(competition.seasonLabelHint || "2026"),
-  );
-  return hinted?.id || seasons[0]?.id || null;
+  const exactSeason = seasons.find(isTargetSeason);
+  return exactSeason?.id || null;
+}
+
+function isTargetSeason(season) {
+  const label = [season.label, season.description, season.name].filter(Boolean).join(" ");
+  return TARGET_SEASON_PATTERN.test(label);
 }
 
 function normalizeFixture(fixture, competitionName, competitionId, seasonId) {
@@ -922,6 +1006,15 @@ document.querySelectorAll(".page-tab").forEach((button) => {
     button.classList.add("is-active");
     document.querySelector(`#${button.dataset.view}`).classList.add("is-active");
     renderDashboard();
+  });
+});
+
+document.querySelectorAll(".table-filter").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".table-filter").forEach((item) => item.classList.remove("is-active"));
+    button.classList.add("is-active");
+    activeDashboardTable = button.dataset.tableFilter;
+    renderLeagueTable();
   });
 });
 

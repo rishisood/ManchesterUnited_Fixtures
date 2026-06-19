@@ -662,6 +662,10 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   border-bottom: 1px solid var(--line);
 }
 
+.table-head {
+  align-items: flex-start;
+}
+
 .panel-head h2 {
   margin: 0;
   font-size: clamp(1.4rem, 3vw, 2.2rem);
@@ -685,28 +689,90 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   white-space: nowrap;
 }
 
+.table-actions {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.table-actions > span {
+  border-radius: 999px;
+  background: rgba(199, 1, 1, 0.11);
+  color: var(--united-red);
+  padding: 7px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table-toggle {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.table-filter {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 253, 248, 0.9);
+  color: var(--ink);
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.table-filter.is-active {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: white;
+}
+
 .table-wrap {
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 10px;
+  scrollbar-gutter: stable;
 }
 
 .league-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
-  font-size: 0.94rem;
+  font-size: 0.78rem;
+}
+
+.league-table .col-pos {
+  width: 8%;
+}
+
+.league-table .col-club {
+  width: 28%;
+}
+
+.league-table .col-stat {
+  width: 8%;
 }
 
 .league-table th,
 .league-table td {
-  padding: 10px 12px;
+  padding: 8px 5px;
   border-bottom: 1px solid var(--line);
   text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .league-table th:nth-child(2),
 .league-table td:nth-child(2) {
   text-align: left;
+}
+
+.league-table th:last-child,
+.league-table td:last-child {
+  padding-right: 12px;
 }
 
 .league-table th {
@@ -725,17 +791,38 @@ body[data-competition-theme="premier-league"] .sticky-controls {
   font-weight: 700;
 }
 
+.league-table tr.is-tbc {
+  color: var(--muted);
+}
+
 .club-cell {
   display: flex;
   align-items: center;
   min-width: 0;
-  gap: 8px;
+  gap: 6px;
 }
 
 .club-cell img {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.club-cell span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.club-placeholder {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: rgba(221, 214, 203, 0.5);
+  flex: 0 0 auto;
 }
 
 .position-chart {
@@ -875,6 +962,67 @@ body[data-competition-theme="premier-league"] .sticky-controls {
 
   .panel-head h2 {
     font-size: clamp(1.2rem, 2.6vw, 1.8rem);
+  }
+
+  .table-head {
+    gap: 10px;
+  }
+
+  .table-toggle {
+    gap: 6px;
+  }
+
+  .table-filter {
+    min-height: 38px;
+    padding-inline: 8px;
+    font-size: 0.72rem;
+  }
+
+  .league-table {
+    font-size: 0.72rem;
+  }
+
+  .league-table .col-pos {
+    width: 10%;
+  }
+
+  .league-table .col-club {
+    width: 34%;
+  }
+
+  .league-table .col-w,
+  .league-table .col-d,
+  .league-table .col-l,
+  .league-table .col-gd,
+  .league-table .col-pts {
+    width: 11.2%;
+  }
+
+  .league-table .col-mp,
+  .league-table .col-gf,
+  .league-table .col-ga,
+  .league-table th:nth-child(3),
+  .league-table td:nth-child(3),
+  .league-table th:nth-child(7),
+  .league-table td:nth-child(7),
+  .league-table th:nth-child(8),
+  .league-table td:nth-child(8) {
+    display: none;
+  }
+
+  .league-table th,
+  .league-table td {
+    padding: 7px 3px;
+  }
+
+  .club-cell {
+    gap: 4px;
+  }
+
+  .club-cell img,
+  .club-placeholder {
+    width: 18px;
+    height: 18px;
   }
 }
 

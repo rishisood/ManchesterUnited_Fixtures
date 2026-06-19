@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Manchester United Fixtures 2026/27</title>
-    <link rel="stylesheet" href="styles.css?v=ott-local-images-20260620" />
+    <link rel="stylesheet" href="styles.css?v=ucl-table-crests-20260620" />
     <!-- Favicon links for web app installation -->
     <link rel="icon" type="image/png" href="UnitedFixtureApp_favicon_use.png" />
     <link rel="apple-touch-icon" href="UnitedFixtureApp_favicon_use.png" />
@@ -131,24 +131,47 @@
             </article>
 
             <article class="dashboard-panel table-panel">
-              <header class="panel-head">
+              <header class="panel-head table-head">
                 <div>
-                  <p class="eyebrow">Premier League</p>
+                  <p id="dashboard-table-label" class="eyebrow">Premier League</p>
                   <h2>
-                    <a href="https://www.premierleague.com/en/tables" target="_blank" rel="noreferrer">
+                    <a id="dashboard-table-link" href="https://www.premierleague.com/en/tables" target="_blank" rel="noreferrer">
                       Table
                     </a>
                   </h2>
                 </div>
-                <span id="table-round">GW 0</span>
+                <div class="table-actions">
+                  <div class="table-toggle" aria-label="Dashboard table">
+                    <button class="table-filter is-active" type="button" data-table-filter="premier-league">Premier League</button>
+                    <button class="table-filter" type="button" data-table-filter="champions-league">Champions League</button>
+                  </div>
+                  <span id="table-round">GW 0</span>
+                </div>
               </header>
               <div class="table-wrap">
                 <table class="league-table">
+                  <colgroup>
+                    <col class="col-pos" />
+                    <col class="col-club" />
+                    <col class="col-stat col-mp" />
+                    <col class="col-stat col-w" />
+                    <col class="col-stat col-d" />
+                    <col class="col-stat col-l" />
+                    <col class="col-stat col-gf" />
+                    <col class="col-stat col-ga" />
+                    <col class="col-stat col-gd" />
+                    <col class="col-stat col-pts" />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>Pos</th>
                       <th>Club</th>
-                      <th>P</th>
+                      <th>MP</th>
+                      <th>W</th>
+                      <th>D</th>
+                      <th>L</th>
+                      <th>GF</th>
+                      <th>GA</th>
                       <th>GD</th>
                       <th>Pts</th>
                     </tr>
@@ -236,6 +259,6 @@
       <p class="attribution">This is an independent fan project. Fixture data sourced from Premier League. Manchester United is a registered trademark of Manchester United Football Club.</p>
     </footer>
 
-    <script src="app.js?v=ott-local-images-20260620"></script>
+    <script src="app.js?v=ucl-table-crests-20260620"></script>
   </body>
 </html>

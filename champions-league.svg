@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Champions League">
+  <rect width="64" height="64" rx="18" fill="#1f38c8"/>
+  <g fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="3">
+    <path d="M32 10l4.7 13.3L51 23.6 39.7 32.2 43.8 46 32 38.2 20.2 46l4.1-13.8L13 23.6l14.3-.3L32 10z"/>
+    <path d="M22 19c5.8 5.5 14.2 5.5 20 0"/>
+    <path d="M18 30c7.8-3.5 20.2-3.5 28 0"/>
+    <path d="M21 43c6.4-4.2 15.6-4.2 22 0"/>
+  </g>
+</svg>
