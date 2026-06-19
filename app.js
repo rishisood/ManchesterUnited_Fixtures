@@ -266,6 +266,7 @@ function renderMonthFilters() {
     button.textContent = monthLabel(key);
     button.addEventListener("click", () => {
       activeMonth = key;
+      updateCompetitionTheme();
       renderMonthFilters();
       render();
     });
@@ -297,7 +298,10 @@ function render() {
 }
 
 function updateCompetitionTheme() {
-  document.body.dataset.competitionTheme = COMPETITION_THEMES[activeCompetition] || "premier-league";
+  const selectedCompetition =
+    document.querySelector(".filter.is-active")?.dataset.filter || activeCompetition;
+  activeCompetition = selectedCompetition;
+  document.body.dataset.competitionTheme = COMPETITION_THEMES[selectedCompetition] || "premier-league";
 }
 
 function createCard(fixture) {
