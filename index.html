@@ -32,7 +32,7 @@
               <button id="refresh-button" type="button">Refresh fixtures</button>
             </div>
             <div class="sync-status-row">
-              <p id="data-status">Seeded from Premier League feed</p>
+              <p id="data-status">Seeded from fixture feeds</p>
             </div>
           </div>
         </header>
@@ -61,23 +61,15 @@
               <span>Away</span>
             </article>
             <article>
-              <strong id="next-match">22 Aug</strong>
-              <span>First fixture</span>
+              <strong id="next-match">TBC</strong>
+              <span id="next-match-date" class="next-match-date">Next fixture</span>
+              <span id="international-break" class="international-break">Intl break: 21 Sep-6 Oct 2026</span>
             </article>
           </section>
 
           <div class="sticky-controls">
             <nav class="filters" aria-label="Competition filters">
-              <div class="competition-filters">
-                <button class="filter is-active" type="button" data-filter="Premier League">
-                  Premier League
-                </button>
-                <button class="filter" type="button" data-filter="UEFA Champions League">
-                  Champions League
-                </button>
-                <button class="filter" type="button" data-filter="FA Cup">FA Cup</button>
-                <button class="filter" type="button" data-filter="EFL Cup">EFL Cup</button>
-              </div>
+              <div class="competition-filters"></div>
               <div class="filter-actions">
                 <button class="venue-filter is-active" type="button" data-venue-filter="all">
                   All venues

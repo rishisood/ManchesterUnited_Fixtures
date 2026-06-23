@@ -6,7 +6,29 @@ const UNITED = {
   opta: "t1",
 };
 
+const PRE_SEASON_NAME = "Pre-Season";
+const MUTV_URL = "https://www.manutd.com/en/mutv";
+const MUTV_LOGO =
+  "https://upload.wikimedia.org/wikipedia/en/thumb/b/b8/MUTV_logo.png/250px-MUTV_logo.png";
+
+const TEAM_CREST_OVERRIDES = {
+  "Atletico Madrid": "https://crests.football-data.org/78.png",
+  "Atlético Madrid": "https://crests.football-data.org/78.png",
+  "Milan": "https://crests.football-data.org/98.png",
+  "Paris Saint Germain": "https://crests.football-data.org/524.png",
+  "Paris Saint-Germain": "https://crests.football-data.org/524.png",
+  "Rosenborg": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/40/Rosenborg_logo_RGB.svg/250px-Rosenborg_logo_RGB.svg.png",
+  "Wrexham": "https://upload.wikimedia.org/wikipedia/en/thumb/0/0d/Wrexham_A.F.C._Logo.svg/250px-Wrexham_A.F.C._Logo.svg.png",
+};
+
 const COMPETITIONS = [
+  {
+    name: PRE_SEASON_NAME,
+    id: 14,
+    seasonId: 831,
+    seeded: true,
+    source: "Premier League/Pulse friendlies feed",
+  },
   {
     name: "Premier League",
     id: 1,
@@ -35,6 +57,15 @@ const COMPETITIONS = [
 ];
 
 const TARGET_SEASON_PATTERN = /(^|[^0-9])2026\s*[/-]\s*(?:2027|27)(?=$|[^0-9])/;
+
+const SEEDED_PRE_SEASON_FIXTURES = [
+  { id: 128731, matchweek: 1, date: "Sat 18 Jul 2026, 16:00 BST", timestamp: 1784386800000, home: "Manchester United", away: "Wrexham", opponent: "Wrexham", opponentShort: "Wrexham", opponentAbbr: "WRX", opponentId: 195, opponentOpta: "t109", venue: "Helsinki Olympic Stadium", city: "Helsinki", homeAway: "neutral", competition: PRE_SEASON_NAME, competitionId: 14, seasonId: 831, status: "U" },
+  { id: 128834, matchweek: 1, date: "Fri 24 Jul 2026, 17:00 BST", timestamp: 1784908800000, home: "Rosenborg", away: "Manchester United", opponent: "Rosenborg", opponentShort: "Rosenborg", opponentAbbr: "RSB", opponentId: 371, opponentOpta: "t197", venue: "Lerkendal Stadium", city: "Trondheim", homeAway: "neutral", competition: PRE_SEASON_NAME, competitionId: 14, seasonId: 831, status: "U" },
+  { id: 128836, matchweek: 1, date: "Sat 1 Aug 2026, 14:00 BST", timestamp: 1785589200000, home: "Manchester United", away: "Atletico Madrid", opponent: "Atletico Madrid", opponentShort: "Atletico", opponentAbbr: "ATM", opponentId: 48, opponentOpta: "t175", venue: "Strawberry Arena", city: "Stockholm", homeAway: "neutral", competition: PRE_SEASON_NAME, competitionId: 14, seasonId: 831, status: "U" },
+  { id: 128833, matchweek: 1, date: "Sat 8 Aug 2026, 16:00 BST", timestamp: 1786201200000, home: "Paris Saint Germain", away: "Manchester United", opponent: "Paris Saint Germain", opponentShort: "PSG", opponentAbbr: "PSG", opponentId: 67, opponentOpta: "t149", venue: "Ullevi Stadium", city: "Gothenburg", homeAway: "neutral", competition: PRE_SEASON_NAME, competitionId: 14, seasonId: 831, status: "U" },
+  { id: 128825, matchweek: 1, date: "Wed 12 Aug 2026, 19:30 BST", timestamp: 1786559400000, home: "Leeds United", away: "Manchester United", opponent: "Leeds United", opponentShort: "Leeds", opponentAbbr: "LEE", opponentId: 9, opponentOpta: "t2", venue: "Croke Park", city: "Dublin", homeAway: "neutral", competition: PRE_SEASON_NAME, competitionId: 14, seasonId: 831, status: "U" },
+  { id: 128906, matchweek: 1, date: "Sat 15 Aug 2026", timestamp: 1786752000000, home: "Milan", away: "Manchester United", opponent: "Milan", opponentShort: "Milan", opponentAbbr: "ACM", opponentId: 64, opponentOpta: "t120", venue: "Tarczynski Arena", city: "Wroclaw", homeAway: "neutral", competition: PRE_SEASON_NAME, competitionId: 14, seasonId: 831, status: "U" },
+];
 
 const SEEDED_FIXTURES = [
   { id: 128926, matchweek: 1, date: "Sat 22 Aug 2026, 12:30 BST", timestamp: 1787398200000, home: "Hull City", away: "Manchester United", opponent: "Hull City", opponentShort: "Hull", opponentAbbr: "HUL", opponentId: 41, opponentOpta: "t88", venue: "MKM Stadium", city: "Hull", homeAway: "away", competition: "Premier League", competitionId: 1, seasonId: 841 },
@@ -163,11 +194,11 @@ const CHAMPIONS_LEAGUE_STANDINGS = [
   }),
 );
 
-let fixtures = [...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
+let fixtures = [...SEEDED_PRE_SEASON_FIXTURES, ...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
 let standingsHistory = [{ gameweek: 0, entries: SEEDED_STANDINGS }];
 let topScorer = null;
 let topAssister = null;
-let activeCompetition = "Premier League";
+let activeCompetition = defaultCompetition();
 let activeVenue = "all";
 let activeMonth = "all";
 let activeDashboardTable = "premier-league";
@@ -178,6 +209,7 @@ let pullDistance = 0;
 let pullReady = false;
 
 const COMPETITION_THEMES = {
+  [PRE_SEASON_NAME]: "pre-season",
   "Premier League": "premier-league",
   "UEFA Champions League": "champions-league",
   "FA Cup": "fa-cup",
@@ -191,6 +223,7 @@ const template = document.querySelector("#fixture-card-template");
 const dataStatus = document.querySelector("#data-status");
 const refreshButton = document.querySelector("#refresh-button");
 const completedToggle = document.querySelector("#completed-toggle");
+const competitionFilters = document.querySelector(".competition-filters");
 const monthFilters = document.querySelector("#month-filters");
 const tableBody = document.querySelector("#league-table-body");
 const tableRound = document.querySelector("#table-round");
@@ -333,6 +366,47 @@ function renderMonthFilters() {
   });
 }
 
+function orderedCompetitions() {
+  const preSeason = COMPETITIONS.find((competition) => competition.name === PRE_SEASON_NAME);
+  const others = COMPETITIONS.filter((competition) => competition.name !== PRE_SEASON_NAME);
+  if (!preSeason) return others;
+  return isPreSeasonComplete() ? [...others, preSeason] : [preSeason, ...others];
+}
+
+function isPreSeasonComplete() {
+  const preSeasonFixtures = realFixturesForCompetition(PRE_SEASON_NAME);
+  return preSeasonFixtures.length > 0 && preSeasonFixtures.every(isCompleted);
+}
+
+function defaultCompetition() {
+  return isPreSeasonComplete() ? "Premier League" : PRE_SEASON_NAME;
+}
+
+function syncDefaultCompetition() {
+  const preferredCompetition = defaultCompetition();
+  if (activeCompetition === PRE_SEASON_NAME || activeCompetition === "Premier League") {
+    activeCompetition = preferredCompetition;
+  }
+}
+
+function competitionButtonLabel(competitionName) {
+  return competitionName === "UEFA Champions League" ? "Champions League" : competitionName;
+}
+
+function renderCompetitionFilters() {
+  competitionFilters.replaceChildren();
+  orderedCompetitions().forEach((competition) => {
+    const button = document.createElement("button");
+    button.className = "filter";
+    button.type = "button";
+    button.dataset.filter = competition.name;
+    button.textContent = competitionButtonLabel(competition.name);
+    button.addEventListener("click", () => setActiveCompetition(competition.name));
+    competitionFilters.appendChild(button);
+  });
+  syncCompetitionButtons();
+}
+
 function hasRealFixturesInActiveCompetition() {
   return fixtures.some((fixture) => fixture.competition === activeCompetition && !fixture.pending);
 }
@@ -349,15 +423,22 @@ function matchesActiveVenue(fixture) {
   return fixture.pending || activeVenue === "all" || fixture.homeAway === activeVenue;
 }
 
+function isPreSeasonSelected() {
+  return activeCompetition === PRE_SEASON_NAME;
+}
+
 function updateVenueFilterStates() {
   const hasFixtures = hasRealFixturesInActiveCompetition();
   document.querySelectorAll(".venue-filter").forEach((button) => {
-    button.disabled = !hasFixtures;
-    button.classList.toggle("is-disabled", !hasFixtures);
+    const isHidden = isPreSeasonSelected();
+    button.hidden = isHidden;
+    button.disabled = isHidden || !hasFixtures;
+    button.classList.toggle("is-disabled", !isHidden && !hasFixtures);
   });
 }
 
 function render() {
+  renderCompetitionFilters();
   updateCompetitionTheme();
   updateVenueFilterStates();
   grid.replaceChildren();
@@ -428,8 +509,7 @@ function createCard(fixture) {
   const date = formatIstDateParts(fixture);
 
   node.querySelector(".competition-pill").textContent = fixture.competition;
-  node.querySelector(".venue-pill").textContent =
-    fixture.homeAway === "home" ? "Home" : fixture.homeAway === "away" ? "Away" : "Pending";
+  node.querySelector(".venue-pill").textContent = venuePillLabel(fixture);
   node.querySelector(".match-date strong").textContent = date.primary;
   node.querySelector(".match-date span").textContent = date.secondary;
 
@@ -450,9 +530,7 @@ function createCard(fixture) {
     fixture.city && fixture.venue !== "Awaiting draw"
       ? `${fixture.venue}, ${fixture.city}`
       : fixture.venue;
-  node.querySelector(".round").textContent = fixture.matchweek
-    ? `Matchweek ${fixture.matchweek}`
-    : "To be confirmed";
+  node.querySelector(".round").textContent = roundLabel(fixture);
   node.querySelector(".streaming").innerHTML = streamingMarkup(fixture.competition);
   node.querySelector(".match-status").textContent = matchStatusText(fixture);
   fillList(node.querySelector(".scorers"), fixture.scorers, "Available after full-time");
@@ -461,12 +539,31 @@ function createCard(fixture) {
   return node;
 }
 
+function roundLabel(fixture) {
+  if (fixture.competition === PRE_SEASON_NAME) return "Friendly";
+  return fixture.matchweek ? `Matchweek ${fixture.matchweek}` : "To be confirmed";
+}
+
+function venuePillLabel(fixture) {
+  if (fixture.homeAway === "neutral") return "Neutral";
+  if (fixture.homeAway === "home") return "Home";
+  if (fixture.homeAway === "away") return "Away";
+  return "Pending";
+}
+
 function isCompleted(fixture) {
   return fixture.status === "C";
 }
 
 function streamingInfo(competition) {
   const services = {
+    [PRE_SEASON_NAME]: {
+      name: "MUTV",
+      initials: "MUTV",
+      className: "mutv",
+      logo: MUTV_LOGO,
+      url: MUTV_URL,
+    },
     "Premier League": {
       name: "JioHotstar",
       initials: "JH",
@@ -500,15 +597,17 @@ function streamingMarkup(competition) {
   const logo = service.logo
     ? `<img src="${service.logo}" alt="" onerror="this.remove()" />`
     : "";
-  return `
-    <span class="streaming-badge">
+  const content = `
       <span class="streaming-icon ${service.className}" aria-hidden="true">
         ${logo}
         <span>${service.initials}</span>
       </span>
       <span>${service.name}</span>
-    </span>
   `;
+  if (service.url) {
+    return `<a class="streaming-badge" href="${service.url}" target="_blank" rel="noreferrer">${content}</a>`;
+  }
+  return `<span class="streaming-badge">${content}</span>`;
 }
 
 function matchStatusText(fixture) {
@@ -532,7 +631,7 @@ function fillList(node, items, fallback) {
 function fillTeam(node, name, optaId, score) {
   const img = node.querySelector("img");
   const scoreNode = node.querySelector(".team-score");
-  img.src = crestUrl(optaId);
+  img.src = teamCrestUrl(name, optaId);
   img.alt = `${name} crest`;
   img.loading = "lazy";
   img.onerror = () => {
@@ -543,9 +642,13 @@ function fillTeam(node, name, optaId, score) {
   node.querySelector(".team-name").textContent = name;
 }
 
+function teamCrestUrl(name, optaId) {
+  return TEAM_CREST_OVERRIDES[name] || crestUrl(optaId);
+}
+
 function updateSummary(list) {
   const realFixtures = list.filter((fixture) => !fixture.pending);
-  const firstFixture = realFixtures[0];
+  const nextFixture = nextGlobalFixture();
 
   document.querySelector("#total-count").textContent = String(realFixtures.length);
   document.querySelector("#home-count").textContent = String(
@@ -554,9 +657,30 @@ function updateSummary(list) {
   document.querySelector("#away-count").textContent = String(
     realFixtures.filter((fixture) => fixture.homeAway === "away").length,
   );
-  document.querySelector("#next-match").textContent = firstFixture
-    ? formatIstDateParts(firstFixture).primary.replace(/^[A-Za-z]{3},?\s/, "")
+  document.querySelector("#next-match").textContent = nextFixture
+    ? daysUntilFixtureLabel(nextFixture)
     : "TBC";
+  document.querySelector("#next-match-date").textContent = nextFixture
+    ? formatIstDateParts(nextFixture).primary.replace(/^[A-Za-z]{3},?\s/, "")
+    : "Next fixture TBC";
+}
+
+function nextGlobalFixture() {
+  const upcoming = fixtures
+    .filter((fixture) => !fixture.pending && !isCompleted(fixture))
+    .sort((a, b) => a.timestamp - b.timestamp);
+  return upcoming[0] || null;
+}
+
+function daysUntilFixtureLabel(fixture) {
+  const date = dateFromFixture(fixture);
+  if (!date) return "TBC";
+
+  const now = new Date();
+  const days = Math.ceil((date.getTime() - now.getTime()) / 86400000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "1 day";
+  return `${days} days`;
 }
 
 function renderDashboard() {
@@ -732,6 +856,7 @@ async function refreshFixtures({ automatic = false } = {}) {
     ]);
     const fetched = fetchedGroups.flat();
     fixtures = mergeFixtures(fetched);
+    syncDefaultCompetition();
     standingsHistory = fetchedStandings.length ? fetchedStandings : standingsHistory;
     topScorer = fetchedTopScorer || topScorer;
     topAssister = fetchedTopAssister || topAssister;
@@ -741,8 +866,9 @@ async function refreshFixtures({ automatic = false } = {}) {
     });
     dataStatus.textContent = `Updated ${checkedAt}`;
   } catch (error) {
-    dataStatus.textContent = "Live refresh needs the serverless proxy. Showing seeded PL fixtures.";
-    fixtures = [...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
+    dataStatus.textContent = "Live refresh needs the serverless proxy. Showing seeded fixtures.";
+    fixtures = [...SEEDED_PRE_SEASON_FIXTURES, ...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
+    syncDefaultCompetition();
   } finally {
     isRefreshing = false;
     refreshButton.disabled = false;
@@ -905,6 +1031,11 @@ function normalizeFixture(fixture, competitionName, competitionId, seasonId) {
       : null;
   const playerNames = createPlayerNameMap(fixture);
   const events = fixture.events || fixture.goals || [];
+  const homeAway = competitionName === PRE_SEASON_NAME
+    ? "neutral"
+    : homeTeam?.id === UNITED.id
+      ? "home"
+      : "away";
 
   return {
     id: fixture.id,
@@ -920,7 +1051,7 @@ function normalizeFixture(fixture, competitionName, competitionId, seasonId) {
     opponentOpta: opponent?.altIds?.opta || null,
     venue: fixture.ground?.name || "Venue TBC",
     city: fixture.ground?.city || "",
-    homeAway: homeTeam?.id === UNITED.id ? "home" : "away",
+    homeAway,
     competition: competitionName,
     competitionId,
     seasonId,
@@ -973,7 +1104,7 @@ function normalizeAssists(events, playerNames) {
 
 function mergeFixtures(fetched) {
   const byKey = new Map();
-  [...SEEDED_FIXTURES, ...fetched].forEach((fixture) => {
+  [...SEEDED_PRE_SEASON_FIXTURES, ...SEEDED_FIXTURES, ...fetched].forEach((fixture) => {
     byKey.set(`${fixture.competitionId}-${fixture.id}`, fixture);
   });
 
@@ -984,14 +1115,6 @@ function mergeFixtures(fetched) {
   });
   return merged;
 }
-
-document.querySelectorAll(".filter").forEach((button) => {
-  button.addEventListener("click", () => {
-    document.querySelectorAll(".filter").forEach((item) => item.classList.remove("is-active"));
-    button.classList.add("is-active");
-    setActiveCompetition(button.dataset.filter);
-  });
-});
 
 document.querySelectorAll(".venue-filter").forEach((button) => {
   button.addEventListener("click", () => {
