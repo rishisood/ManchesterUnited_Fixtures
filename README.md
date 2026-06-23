@@ -7,10 +7,12 @@ A static web application for tracking Manchester United fixtures across the 2026
 - Manchester United-only fixture view for home and away matches.
 - Premier League fixture data seeded from the Premier League/Pulse fixture feed.
 - Live fixture refresh on page load, plus a manual `Refresh fixtures` button.
+- Daily cached data refresh so repeat visits load quickly while still checking live data once per day.
 - Competition filters for Premier League, UEFA Champions League, FA Cup, and EFL Cup.
 - Venue filters for all fixtures, home fixtures, and away fixtures.
 - Month filters generated from the fixture dates.
 - Completed-match toggle that hides finished matches by default and shows results on demand.
+- Service-worker caching for app assets, crests, logos, and player photos.
 - IST kickoff times.
 - Club crests for Manchester United and opponents.
 - OTT/watch badges by competition, including JioHotstar, SonyLIV, FanCode, and TBC where rights are uncertain.
@@ -78,3 +80,14 @@ To undo the proxy-refresh changes locally, run:
 - Premier League crest and player-image CDN where available.
 
 Some tournament fixtures, scorers, assists, and player stats only appear once those feeds publish the relevant data.
+
+## Daily Cache Rollback
+
+If the daily cache behavior causes production issues, revert the cache commit on `dev` and redeploy from the previous working commit:
+
+```powershell
+git revert <daily-cache-commit-sha>
+git push origin dev
+```
+
+The earlier pre-season/mobile-polish commit is intentionally separate, so this rollback removes only the cache/service-worker layer.

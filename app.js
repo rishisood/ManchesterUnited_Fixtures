@@ -138,6 +138,9 @@ function createPendingTournament(name, id, index) {
 }
 
 const AUTO_REFRESH_ON_LOAD = true;
+const APP_STATE_CACHE_KEY = "man-utd-fixtures-state-v2";
+const APP_CACHE_SCHEMA_VERSION = 2;
+const APP_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const LIVE_API_ORIGIN = "https://footballapi.pulselive.com";
 const LIVE_API_PROXY = "/.netlify/functions/pl-api";
 const CHAMPIONS_LEAGUE_LOGO = "champions-league.svg";
@@ -841,11 +844,116 @@ function setPlayerPhoto(img, src, alt) {
   };
 }
 
+function renderApp() {
+  renderMonthFilters();
+  render();
+  updateVenueFilterStates();
+}
+
+function currentAppState() {
+  return {
+    fixtures,
+    standingsHistory,
+    topScorer,
+    topAssister,
+  };
+}
+
+function applyAppState(state) {
+  fixtures = Array.isArray(state.fixtures) ? state.fixtures : fixtures;
+  standingsHistory = Array.isArray(state.standingsHistory) && state.standingsHistory.length
+    ? state.standingsHistory
+    : standingsHistory;
+  topScorer = state.topScorer || topScorer;
+  topAssister = state.topAssister || topAssister;
+  syncDefaultCompetition();
+}
+
+function stateSignature(state) {
+  return JSON.stringify(state);
+}
+
+function todayCacheKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function loadCachedState() {
+  try {
+    const raw = localStorage.getItem(APP_STATE_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (cached.schemaVersion !== APP_CACHE_SCHEMA_VERSION) return null;
+    if (!Array.isArray(cached.fixtures) || !Array.isArray(cached.standingsHistory)) return null;
+    return cached;
+  } catch {
+    return null;
+  }
+}
+
+function saveCachedState({ markAutoRefresh = false } = {}) {
+  try {
+    const now = Date.now();
+    const previous = loadCachedState();
+    localStorage.setItem(
+      APP_STATE_CACHE_KEY,
+      JSON.stringify({
+        schemaVersion: APP_CACHE_SCHEMA_VERSION,
+        savedAt: now,
+        lastAutoRefreshDate: markAutoRefresh
+          ? todayCacheKey()
+          : previous?.lastAutoRefreshDate || null,
+        ...currentAppState(),
+      }),
+    );
+  } catch {
+    // Cache is an optimization; the app still works with seeded data.
+  }
+}
+
+function shouldAutoRefreshToday(cached) {
+  return !cached || cached.lastAutoRefreshDate !== todayCacheKey();
+}
+
+function cacheAgeText(cached) {
+  if (!cached?.savedAt) return "";
+  const ageMs = Date.now() - cached.savedAt;
+  if (ageMs < 60000) return "just now";
+  if (ageMs < 3600000) return `${Math.floor(ageMs / 60000)}m ago`;
+  if (ageMs < APP_CACHE_MAX_AGE_MS) return `${Math.floor(ageMs / 3600000)}h ago`;
+  return "over 24h ago";
+}
+
+function initializeApp() {
+  const cached = loadCachedState();
+  if (cached) {
+    applyAppState(cached);
+    dataStatus.textContent = `Loaded cached fixtures from ${cacheAgeText(cached)}`;
+  }
+
+  renderApp();
+
+  if (AUTO_REFRESH_ON_LOAD && shouldAutoRefreshToday(cached)) {
+    refreshFixtures({ automatic: true });
+  } else if (cached) {
+    dataStatus.textContent = `Using today's cached fixtures. Last updated ${cacheAgeText(cached)}`;
+  }
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator) || window.location.protocol === "file:") return;
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
 async function refreshFixtures({ automatic = false } = {}) {
   if (isRefreshing) return;
   isRefreshing = true;
   refreshButton.disabled = true;
   dataStatus.textContent = automatic ? "Checking latest fixtures..." : "Checking tournament feeds...";
+  let shouldRender = false;
 
   try {
     const [fetchedGroups, fetchedStandings, fetchedTopScorer, fetchedTopAssister] = await Promise.all([
@@ -855,25 +963,35 @@ async function refreshFixtures({ automatic = false } = {}) {
       fetchTopAssister(),
     ]);
     const fetched = fetchedGroups.flat();
-    fixtures = mergeFixtures(fetched);
-    syncDefaultCompetition();
-    standingsHistory = fetchedStandings.length ? fetchedStandings : standingsHistory;
-    topScorer = fetchedTopScorer || topScorer;
-    topAssister = fetchedTopAssister || topAssister;
+    const nextState = {
+      fixtures: mergeFixtures(fetched),
+      standingsHistory: fetchedStandings.length ? fetchedStandings : standingsHistory,
+      topScorer: fetchedTopScorer || topScorer,
+      topAssister: fetchedTopAssister || topAssister,
+    };
+    shouldRender = stateSignature(currentAppState()) !== stateSignature(nextState);
+    applyAppState(nextState);
+    saveCachedState({ markAutoRefresh: true });
     const checkedAt = new Date().toLocaleString([], {
       dateStyle: "medium",
       timeStyle: "short",
     });
-    dataStatus.textContent = `Updated ${checkedAt}`;
+    dataStatus.textContent = shouldRender ? `Updated ${checkedAt}` : `Already up to date ${checkedAt}`;
   } catch (error) {
-    dataStatus.textContent = "Live refresh needs the serverless proxy. Showing seeded fixtures.";
-    fixtures = [...SEEDED_PRE_SEASON_FIXTURES, ...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
-    syncDefaultCompetition();
+    const cached = loadCachedState();
+    if (cached) {
+      applyAppState(cached);
+      dataStatus.textContent = `Live refresh failed. Showing cached fixtures from ${cacheAgeText(cached)}`;
+    } else {
+      dataStatus.textContent = "Live refresh needs the serverless proxy. Showing seeded fixtures.";
+      fixtures = [...SEEDED_PRE_SEASON_FIXTURES, ...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
+      syncDefaultCompetition();
+    }
+    shouldRender = true;
   } finally {
     isRefreshing = false;
     refreshButton.disabled = false;
-    renderMonthFilters();
-    render();
+    if (shouldRender) renderApp();
   }
 }
 
@@ -1213,7 +1331,7 @@ function setupPullToRefresh() {
     "touchend",
     () => {
       if (pullReady && !isRefreshing) {
-        refreshFixtures({ automatic: true });
+        refreshFixtures();
       }
 
       pullStartY = null;
@@ -1226,13 +1344,9 @@ function setupPullToRefresh() {
 
 setupPullToRefresh();
 
+registerServiceWorker();
+
 completedToggle.classList.toggle("is-active", showCompleted);
 completedToggle.textContent = showCompleted ? "Hide completed" : "Show completed";
 
-renderMonthFilters();
-render();
-updateVenueFilterStates();
-
-if (AUTO_REFRESH_ON_LOAD) {
-  refreshFixtures({ automatic: true });
-}
+initializeApp();
