@@ -139,10 +139,12 @@ function createPendingTournament(name, id, index) {
 
 const AUTO_REFRESH_ON_LOAD = true;
 const APP_STATE_CACHE_KEY = "man-utd-fixtures-state-v2";
-const APP_CACHE_SCHEMA_VERSION = 2;
+const APP_CACHE_SCHEMA_VERSION = 5;
 const APP_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const LIVE_API_ORIGIN = "https://footballapi.pulselive.com";
 const LIVE_API_PROXY = "/.netlify/functions/pl-api";
+const LIVE_REFRESH_INTERVAL_MS = 30000;
+const NEXT_MATCH_TICK_MS = 1000;
 const CHAMPIONS_LEAGUE_LOGO = "champions-league.svg";
 const SEEDED_STANDINGS = [
   createStandingEntry(1, "Arsenal", "Arsenal", 1, "t3"),
@@ -210,6 +212,10 @@ let isRefreshing = false;
 let pullStartY = null;
 let pullDistance = 0;
 let pullReady = false;
+let liveRefreshTimer = null;
+let nextMatchTimer = null;
+let teamModalRequestKey = "";
+const squadCache = new Map();
 
 const COMPETITION_THEMES = {
   [PRE_SEASON_NAME]: "pre-season",
@@ -240,6 +246,12 @@ const topScorerPhoto = document.querySelector("#top-scorer-photo");
 const topAssisterName = document.querySelector("#top-assister-name");
 const topAssisterMeta = document.querySelector("#top-assister-meta");
 const topAssisterPhoto = document.querySelector("#top-assister-photo");
+const teamModal = document.querySelector("#team-modal");
+const teamModalBody = document.querySelector("#team-modal-body");
+const teamModalTitle = document.querySelector("#team-modal-title");
+const teamModalEyebrow = document.querySelector("#team-modal-eyebrow");
+const teamModalSubtitle = document.querySelector("#team-modal-subtitle");
+const teamModalClose = document.querySelector("#team-modal-close");
 
 function createStandingEntry(position, name, shortName, id = null, opta = null, stats = {}) {
   return {
@@ -279,26 +291,85 @@ function parseDateParts(label) {
   };
 }
 
-function formatIstDateParts(fixture) {
+function browserLocale() {
+  return navigator.language || "en-US";
+}
+
+function browserTimeZone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+}
+
+function timeZoneOffsetToken(date, timeZone) {
+  return (
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(date)
+      .find((part) => part.type === "timeZoneName")?.value || ""
+  );
+}
+
+function timeZoneAbbreviation(date, timeZone) {
+  const fallback =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "short",
+    })
+      .formatToParts(date)
+      .find((part) => part.type === "timeZoneName")?.value || "";
+
+  const mappedZones = {
+    "Asia/Calcutta": { standard: "IST", daylight: "IST" },
+    "Asia/Kolkata": { standard: "IST", daylight: "IST" },
+    "America/Chicago": { standard: "CST", daylight: "CDT" },
+    "America/New_York": { standard: "EST", daylight: "EDT" },
+    "America/Denver": { standard: "MST", daylight: "MDT" },
+    "America/Los_Angeles": { standard: "PST", daylight: "PDT" },
+    "Europe/Amsterdam": { standard: "CET", daylight: "CEST" },
+    "Europe/Berlin": { standard: "CET", daylight: "CEST" },
+    "Europe/London": { standard: "GMT", daylight: "BST" },
+  };
+
+  const mapped = mappedZones[timeZone];
+  if (!mapped) {
+    return fallback;
+  }
+
+  const year = date.getUTCFullYear();
+  const januaryToken = timeZoneOffsetToken(new Date(Date.UTC(year, 0, 15, 12)), timeZone);
+  const julyToken = timeZoneOffsetToken(new Date(Date.UTC(year, 6, 15, 12)), timeZone);
+  const currentToken = timeZoneOffsetToken(date, timeZone);
+
+  if (januaryToken && currentToken === januaryToken) return mapped.standard;
+  if (julyToken && currentToken === julyToken) return mapped.daylight;
+  return fallback || mapped.standard;
+}
+
+function formatFixtureDateParts(fixture) {
   const date = dateFromFixture(fixture);
   if (!date) {
     return parseDateParts(fixture.date);
   }
 
+  const timeZone = browserTimeZone();
+  const locale = browserLocale();
+  const zoneLabel = timeZoneAbbreviation(date, timeZone);
+
   return {
-    primary: new Intl.DateTimeFormat("en-IN", {
+    primary: new Intl.DateTimeFormat(locale, {
       weekday: "short",
       day: "2-digit",
       month: "short",
       year: "numeric",
-      timeZone: "Asia/Kolkata",
+      timeZone,
     }).format(date),
-    secondary: `${new Intl.DateTimeFormat("en-IN", {
-      hour: "2-digit",
+    secondary: `${new Intl.DateTimeFormat(locale, {
+      hour: "numeric",
       minute: "2-digit",
-      hour12: false,
-      timeZone: "Asia/Kolkata",
-    }).format(date)} IST`,
+      hour12: undefined,
+      timeZone,
+    }).format(date)}${zoneLabel ? ` ${zoneLabel}` : ""}`,
   };
 }
 
@@ -315,7 +386,7 @@ function monthKey(fixture) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     year: "numeric",
     month: "2-digit",
-    timeZone: "Asia/Kolkata",
+    timeZone: browserTimeZone(),
   }).formatToParts(date);
   const year = parts.find((part) => part.type === "year")?.value;
   const month = parts.find((part) => part.type === "month")?.value;
@@ -472,6 +543,7 @@ function render() {
   filtered.forEach((fixture) => grid.appendChild(createCard(fixture)));
   updateSummary(filtered);
   renderDashboard();
+  syncLiveRefreshPolling();
 }
 
 function updateCompetitionTheme() {
@@ -507,27 +579,18 @@ function createCard(fixture) {
   const node = template.content.firstElementChild.cloneNode(true);
   node.classList.add(fixture.homeAway);
   if (fixture.pending) node.classList.add("pending");
+  if (isCompleted(fixture)) node.classList.add("completed");
 
   const [homeNode, awayNode] = node.querySelectorAll(".team");
-  const date = formatIstDateParts(fixture);
+  const date = formatFixtureDateParts(fixture);
 
   node.querySelector(".competition-pill").textContent = fixture.competition;
   node.querySelector(".venue-pill").textContent = venuePillLabel(fixture);
   node.querySelector(".match-date strong").textContent = date.primary;
   node.querySelector(".match-date span").textContent = date.secondary;
 
-  fillTeam(
-    homeNode,
-    fixture.home,
-    fixture.home === UNITED.name ? UNITED.opta : fixture.opponentOpta,
-    fixture.score?.home,
-  );
-  fillTeam(
-    awayNode,
-    fixture.away,
-    fixture.away === UNITED.name ? UNITED.opta : fixture.opponentOpta,
-    fixture.score?.away,
-  );
+  fillTeam(homeNode, fixture, "home");
+  fillTeam(awayNode, fixture, "away");
 
   node.querySelector(".venue").textContent =
     fixture.city && fixture.venue !== "Awaiting draw"
@@ -536,8 +599,8 @@ function createCard(fixture) {
   node.querySelector(".round").textContent = roundLabel(fixture);
   node.querySelector(".streaming").innerHTML = streamingMarkup(fixture.competition);
   node.querySelector(".match-status").textContent = matchStatusText(fixture);
-  fillList(node.querySelector(".scorers"), fixture.scorers, "Available after full-time");
-  fillList(node.querySelector(".assists"), fixture.assists, "Available after full-time");
+  renderTeamEventColumns(node.querySelector(".scorers"), fixture, fixture.scorers);
+  renderTeamEventColumns(node.querySelector(".assists"), fixture, fixture.assists);
 
   return node;
 }
@@ -615,25 +678,149 @@ function streamingMarkup(competition) {
 
 function matchStatusText(fixture) {
   if (fixture.pending) return "Awaiting fixture release";
-  if (fixture.status === "C" && fixture.score) {
-    return "Completed";
-  }
+  if (isFullTime(fixture)) return "FT";
+  if (isHalfTime(fixture)) return "HT";
+  if (isLiveFixture(fixture)) return liveClockLabel(fixture) || "Live";
   return "Not played yet";
 }
 
-function fillList(node, items, fallback) {
+function statusCode(fixture) {
+  return String(fixture.status || "").toUpperCase();
+}
+
+function phaseText(fixture) {
+  return String(fixture.phase || fixture.statusText || "").toUpperCase();
+}
+
+function isFullTime(fixture) {
+  const code = statusCode(fixture);
+  const phase = phaseText(fixture);
+  return code === "C" || code === "FT" || phase.includes("FULL TIME") || phase === "FT";
+}
+
+function isHalfTime(fixture) {
+  const code = statusCode(fixture);
+  const phase = phaseText(fixture);
+  return code === "H" || code === "HT" || phase.includes("HALF TIME") || phase === "HT";
+}
+
+function isLiveFixture(fixture) {
+  if (fixture.pending || isFullTime(fixture) || isHalfTime(fixture)) return false;
+  const code = statusCode(fixture);
+  const phase = phaseText(fixture);
+  return (
+    ["I", "L", "LIVE", "1", "2", "E", "P"].includes(code) ||
+    phase.includes("LIVE") ||
+    phase.includes("IN PLAY") ||
+    phase.includes("FIRST HALF") ||
+    phase.includes("SECOND HALF") ||
+    phase.includes("EXTRA TIME") ||
+    phase.includes("PENALT")
+  );
+}
+
+function liveClockLabel(fixture) {
+  const candidate =
+    fixture.clockLabel ||
+    fixture.clock?.label ||
+    fixture.clockText ||
+    fixture.clockDisplay ||
+    fixture.minuteLabel ||
+    null;
+
+  if (!candidate) return "";
+  const trimmed = String(candidate).trim();
+  if (!trimmed) return "";
+  if (/[0-9]$/.test(trimmed)) return `${trimmed}'`;
+  return trimmed;
+}
+
+function hasActiveLiveFixture(list = fixtures) {
+  return list.some((fixture) => isLiveFixture(fixture) || isHalfTime(fixture));
+}
+
+function syncLiveRefreshPolling() {
+  if (liveRefreshTimer) {
+    clearInterval(liveRefreshTimer);
+    liveRefreshTimer = null;
+  }
+
+  if (!hasActiveLiveFixture() || document.visibilityState === "hidden") return;
+
+  liveRefreshTimer = window.setInterval(() => {
+    refreshFixtures({ automatic: true });
+  }, LIVE_REFRESH_INTERVAL_MS);
+}
+
+function renderTeamEventColumns(node, fixture, items) {
   node.innerHTML = "";
-  const values = items && items.length ? items : [fallback];
-  values.forEach((item) => {
-    const li = document.createElement("li");
-    li.textContent = typeof item === "string" ? item : item.label;
-    node.appendChild(li);
+  const columns = [
+    {
+      key: "home",
+      crest: teamCrestUrl(
+        fixture.home,
+        fixture.homeOpta || (fixture.home === UNITED.name ? UNITED.opta : fixture.opponentOpta),
+      ),
+    },
+    {
+      key: "away",
+      crest: teamCrestUrl(
+        fixture.away,
+        fixture.awayOpta || (fixture.away === UNITED.name ? UNITED.opta : fixture.opponentOpta),
+      ),
+    },
+  ];
+
+  columns.forEach((column) => {
+    const section = document.createElement("section");
+    section.className = "team-event-column";
+
+    const list = document.createElement("ul");
+    list.className = "team-event-list";
+    const sideItems = (items || []).filter((item) => item.side === column.key);
+
+    if (sideItems.length) {
+      sideItems.forEach((item) => {
+        const li = document.createElement("li");
+        li.className = "team-event-item";
+
+        const itemCrest = document.createElement("img");
+        itemCrest.className = "team-event-item-crest";
+        itemCrest.src = column.crest;
+        itemCrest.alt = "";
+        itemCrest.loading = "lazy";
+        itemCrest.setAttribute("aria-hidden", "true");
+        itemCrest.onerror = () => {
+          itemCrest.onerror = null;
+          itemCrest.src = crestUrl(null);
+        };
+
+        const label = document.createElement("span");
+        label.textContent = item.label;
+        label.title = item.label;
+        label.className = "team-event-label";
+
+        li.append(itemCrest, label);
+        list.appendChild(li);
+      });
+    }
+
+    section.appendChild(list);
+    node.appendChild(section);
   });
 }
 
-function fillTeam(node, name, optaId, score) {
+function fillTeam(node, fixture, side) {
+  const isHome = side === "home";
+  const name = isHome ? fixture.home : fixture.away;
+  const teamId = isHome ? fixture.homeTeamId : fixture.awayTeamId;
+  const optaId = isHome ? fixture.homeOpta : fixture.awayOpta;
+  const score = isHome ? fixture.score?.home : fixture.score?.away;
+  const lineup = fixture.lineups?.[side] || null;
   const img = node.querySelector("img");
   const scoreNode = node.querySelector(".team-score");
+  const identityButton = node.querySelector(".team-identity");
+  const nameNode = node.querySelector(".team-name");
   img.src = teamCrestUrl(name, optaId);
   img.alt = `${name} crest`;
   img.loading = "lazy";
@@ -642,7 +829,271 @@ function fillTeam(node, name, optaId, score) {
   };
   scoreNode.textContent = score === undefined || score === null ? "-" : String(score);
   scoreNode.classList.toggle("is-pending", score === undefined || score === null);
-  node.querySelector(".team-name").textContent = name;
+  nameNode.textContent = name;
+  nameNode.title = name;
+
+  const canOpenTeamModal = !fixture.pending && Number.isFinite(Number(teamId));
+  identityButton.disabled = !canOpenTeamModal;
+  identityButton.classList.toggle("is-clickable", canOpenTeamModal);
+  identityButton.title = canOpenTeamModal ? `Show ${name} squad details` : "";
+  identityButton.onclick = canOpenTeamModal ? () => openTeamModal(fixture, side) : null;
+  identityButton.setAttribute("aria-expanded", "false");
+}
+
+function initTeamModal() {
+  if (!teamModal) return;
+
+  teamModalClose?.addEventListener("click", closeTeamModal);
+  teamModal
+    .querySelectorAll("[data-close-team-modal]")
+    .forEach((node) => node.addEventListener("click", closeTeamModal));
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !teamModal.hidden) {
+      closeTeamModal();
+    }
+  });
+}
+
+function openTeamModal(fixture, side) {
+  const teamName = side === "home" ? fixture.home : fixture.away;
+  const teamId = side === "home" ? fixture.homeTeamId : fixture.awayTeamId;
+  if (!Number.isFinite(Number(teamId))) return;
+
+  const announced = shouldShowAnnouncedLineup(fixture);
+  teamModalRequestKey = `${fixture.id}-${side}-${Date.now()}`;
+  const requestKey = teamModalRequestKey;
+  teamModal.hidden = false;
+  document.body.classList.add("has-team-modal");
+  teamModalEyebrow.textContent = `${fixture.competition} • ${matchStatusText(fixture)}`;
+  teamModalTitle.textContent = teamName;
+  teamModalSubtitle.textContent = announced
+    ? "Playing XI and substitutes announced"
+    : "Full squad shown until the lineup announcement window opens";
+  teamModalBody.innerHTML = `<div class="team-modal__status">Loading ${teamName} squad details…</div>`;
+
+  if (announced) {
+    const lineup = fixture.lineups?.[side];
+    if (lineup?.starting?.length || lineup?.substitutes?.length) {
+      renderAnnouncedLineupModal(fixture, side, lineup);
+      return;
+    }
+  }
+
+  if (announced) {
+    fetchLatestFixtureForModal(fixture)
+      .then((latestFixture) => {
+        if (requestKey !== teamModalRequestKey || teamModal.hidden) return;
+        const lineup = latestFixture.lineups?.[side];
+        if (lineup?.starting?.length || lineup?.substitutes?.length) {
+          renderAnnouncedLineupModal(latestFixture, side, lineup);
+          return;
+        }
+        return fetchTeamSquad(teamId, fixture.seasonId).then((players) => {
+          if (requestKey !== teamModalRequestKey || teamModal.hidden) return;
+          renderSquadModal(fixture, side, players);
+        });
+      })
+      .catch(() => {
+        if (requestKey !== teamModalRequestKey || teamModal.hidden) return;
+        fetchTeamSquad(teamId, fixture.seasonId)
+          .then((players) => {
+            if (requestKey !== teamModalRequestKey || teamModal.hidden) return;
+            renderSquadModal(fixture, side, players);
+          })
+          .catch(() => {
+            if (requestKey !== teamModalRequestKey || teamModal.hidden) return;
+            teamModalBody.innerHTML =
+              '<div class="team-modal__status">Squad details are not available from the live feed yet.</div>';
+          });
+      });
+    return;
+  }
+
+  fetchTeamSquad(teamId, fixture.seasonId)
+    .then((players) => {
+      if (requestKey !== teamModalRequestKey || teamModal.hidden) return;
+      renderSquadModal(fixture, side, players);
+    })
+    .catch(() => {
+      if (requestKey !== teamModalRequestKey || teamModal.hidden) return;
+      const lineup = fixture.lineups?.[side];
+      if (lineup?.starting?.length || lineup?.substitutes?.length) {
+        renderAnnouncedLineupModal(fixture, side, lineup);
+        return;
+      }
+      teamModalBody.innerHTML =
+        '<div class="team-modal__status">Squad details are not available from the live feed yet.</div>';
+    });
+}
+
+function closeTeamModal() {
+  if (!teamModal) return;
+  teamModalRequestKey = "";
+  teamModal.hidden = true;
+  teamModalBody.innerHTML = "";
+  document.body.classList.remove("has-team-modal");
+}
+
+async function fetchLatestFixtureForModal(fixture) {
+  const detail = await fetchFixtureDetail(fixture.id);
+  return normalizeFixture(detail, fixture.competition, fixture.competitionId, fixture.seasonId);
+}
+
+function shouldShowAnnouncedLineup(fixture) {
+  return isLineupWindow(fixture) || isHalfTime(fixture) || isLiveFixture(fixture) || isCompleted(fixture);
+}
+
+function renderAnnouncedLineupModal(fixture, side, lineup) {
+  const opponentName = side === "home" ? fixture.away : fixture.home;
+  teamModalSubtitle.textContent = `XI and bench for ${teamModalTitle.textContent} vs ${opponentName}`;
+  teamModalBody.innerHTML = `
+    <section class="team-modal__section">
+      <div class="team-modal__grid">
+        <article class="team-modal__panel">
+          <h4>Starting XI</h4>
+          <ul class="team-lineup-list lineup-starting"></ul>
+        </article>
+        <article class="team-modal__panel">
+          <h4>Substitutes</h4>
+          <ul class="team-lineup-list lineup-subs"></ul>
+        </article>
+      </div>
+    </section>
+  `;
+
+  fillLineupList(teamModalBody.querySelector(".lineup-starting"), lineup.starting);
+  fillLineupList(teamModalBody.querySelector(".lineup-subs"), lineup.substitutes);
+}
+
+function renderSquadModal(fixture, side, players) {
+  const grouped = groupSquadByPosition(players);
+  const sections = grouped
+    .map(
+      (group) => `
+        <article class="team-modal__panel">
+          <h4>${group.label}</h4>
+          <ul class="team-lineup-list">
+            ${group.players.map(renderSquadPlayerItem).join("")}
+          </ul>
+        </article>
+      `,
+    )
+    .join("");
+
+  if (!sections) {
+    teamModalBody.innerHTML =
+      '<div class="team-modal__status">No squad list is available from Pulse for this team yet.</div>';
+    return;
+  }
+
+  const opponentName = side === "home" ? fixture.away : fixture.home;
+  teamModalSubtitle.textContent = `Full squad for ${teamModalTitle.textContent} vs ${opponentName}`;
+  teamModalBody.innerHTML = `
+    <section class="team-modal__section">
+      <h3>Squad by position</h3>
+      <div class="team-modal__grid">${sections}</div>
+    </section>
+  `;
+}
+
+function renderSquadPlayerItem(player) {
+  const shirt = player.shirt ? `<strong>${escapeHtml(String(player.shirt))}</strong>` : "<strong>--</strong>";
+  return `<li class="team-lineup-item">${shirt}<span title="${escapeHtml(player.name)}">${escapeHtml(player.name)}</span></li>`;
+}
+
+async function fetchTeamSquad(teamId, seasonId) {
+  const cacheKey = `${teamId}-${seasonId || "none"}`;
+  if (squadCache.has(cacheKey)) return squadCache.get(cacheKey);
+
+  const params = new URLSearchParams({
+    teams: String(teamId),
+    page: "0",
+    pageSize: "100",
+    altIds: "true",
+  });
+  if (seasonId) params.set("compSeasons", String(seasonId));
+
+  const payload = await fetchLiveJson(`/football/players?${params}`);
+  const players = normalizeTeamSquad(payload.content || [], teamId);
+  squadCache.set(cacheKey, players);
+  return players;
+}
+
+function normalizeTeamSquad(players, teamId) {
+  const seen = new Set();
+  return players
+    .filter((player) => {
+      const currentTeamId = Number(player?.currentTeam?.id);
+      const previousTeamId = Number(player?.previousTeam?.id);
+      return currentTeamId === Number(teamId) || (!currentTeamId && previousTeamId === Number(teamId));
+    })
+    .map((player) => ({
+      name: player?.name?.display || "",
+      shirt: player?.info?.shirtNum || "",
+      positionCode: player?.info?.position || "",
+      positionLabel: player?.info?.positionInfo || "",
+    }))
+    .filter((player) => {
+      if (!player.name) return false;
+      const key = `${player.name}|${player.shirt}|${player.positionCode}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => compareSquadPlayers(a, b));
+}
+
+function compareSquadPlayers(a, b) {
+  const positionRank = {
+    G: 0,
+    D: 1,
+    M: 2,
+    F: 3,
+  };
+  const rankA = positionRank[a.positionCode] ?? 4;
+  const rankB = positionRank[b.positionCode] ?? 4;
+  if (rankA !== rankB) return rankA - rankB;
+
+  const shirtA = Number(a.shirt);
+  const shirtB = Number(b.shirt);
+  if (Number.isFinite(shirtA) && Number.isFinite(shirtB) && shirtA !== shirtB) return shirtA - shirtB;
+  return a.name.localeCompare(b.name);
+}
+
+function groupSquadByPosition(players) {
+  const labels = {
+    G: "Goalkeepers",
+    D: "Defenders",
+    M: "Midfielders",
+    F: "Forwards",
+    X: "Other",
+  };
+  const groups = new Map();
+
+  players.forEach((player) => {
+    const code = labels[player.positionCode] ? player.positionCode : "X";
+    if (!groups.has(code)) {
+      groups.set(code, {
+        label: labels[code],
+        players: [],
+      });
+    }
+    groups.get(code).players.push(player);
+  });
+
+  return ["G", "D", "M", "F", "X"]
+    .map((code) => groups.get(code))
+    .filter((group) => group?.players?.length);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 function teamCrestUrl(name, optaId) {
@@ -651,7 +1102,7 @@ function teamCrestUrl(name, optaId) {
 
 function updateSummary(list) {
   const realFixtures = list.filter((fixture) => !fixture.pending);
-  const nextFixture = nextGlobalFixture();
+  const nextFixture = nextSummaryFixture();
 
   document.querySelector("#total-count").textContent = String(realFixtures.length);
   document.querySelector("#home-count").textContent = String(
@@ -663,9 +1114,63 @@ function updateSummary(list) {
   document.querySelector("#next-match").textContent = nextFixture
     ? daysUntilFixtureLabel(nextFixture)
     : "TBC";
-  document.querySelector("#next-match-date").textContent = nextFixture
-    ? formatIstDateParts(nextFixture).primary.replace(/^[A-Za-z]{3},?\s/, "")
-    : "Next fixture TBC";
+  updateNextMatchSummary(nextFixture);
+}
+
+function isSameLocalDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function formatCountdown(ms) {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, "0");
+  const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, "0");
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+function clearNextMatchTimer() {
+  if (nextMatchTimer) {
+    clearInterval(nextMatchTimer);
+    nextMatchTimer = null;
+  }
+}
+
+function updateNextMatchSummary(nextFixture) {
+  const nextMatchDateNode = document.querySelector("#next-match-date");
+  clearNextMatchTimer();
+
+  if (!nextFixture) {
+    nextMatchDateNode.textContent = "Next fixture TBC";
+    return;
+  }
+
+  const date = dateFromFixture(nextFixture);
+  const formatted = formatFixtureDateParts(nextFixture);
+  if (!date) {
+    nextMatchDateNode.textContent = formatted.primary || "Next fixture TBC";
+    return;
+  }
+
+  const updateLabel = () => {
+    const now = new Date();
+    const sameDay = isSameLocalDay(date, now);
+    if (sameDay && date.getTime() > now.getTime()) {
+      nextMatchDateNode.textContent = `${formatCountdown(date.getTime() - now.getTime())} to kick-off`;
+      return;
+    }
+
+    nextMatchDateNode.textContent = `${formatted.primary.replace(/^[A-Za-z]{3},?\s/, "")} • ${formatted.secondary}`;
+  };
+
+  updateLabel();
+  if (isSameLocalDay(date, new Date()) && date.getTime() > Date.now()) {
+    nextMatchTimer = window.setInterval(updateLabel, NEXT_MATCH_TICK_MS);
+  }
 }
 
 function nextGlobalFixture() {
@@ -675,9 +1180,23 @@ function nextGlobalFixture() {
   return upcoming[0] || null;
 }
 
+function nextSummaryFixture() {
+  if (activeCompetition === "all") {
+    return nextGlobalFixture();
+  }
+
+  const upcoming = realFixturesForCompetition(activeCompetition)
+    .filter((fixture) => !isCompleted(fixture))
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  return upcoming[0] || null;
+}
+
 function daysUntilFixtureLabel(fixture) {
   const date = dateFromFixture(fixture);
   if (!date) return "TBC";
+
+  if (isSameLocalDay(date, new Date())) return "Today";
 
   const now = new Date();
   const days = Math.ceil((date.getTime() - now.getTime()) / 86400000);
@@ -941,6 +1460,8 @@ function initializeApp() {
   } else if (cached) {
     dataStatus.textContent = `Using today's cached fixtures. Last updated ${cacheAgeText(cached)}`;
   }
+
+  syncLiveRefreshPolling();
 }
 
 function registerServiceWorker() {
@@ -992,6 +1513,7 @@ async function refreshFixtures({ automatic = false } = {}) {
     isRefreshing = false;
     refreshButton.disabled = false;
     if (shouldRender) renderApp();
+    else syncLiveRefreshPolling();
   }
 }
 
@@ -1111,15 +1633,45 @@ async function fetchCompetitionFixtures(competition) {
   const payload = await fetchLiveJson(`/football/fixtures?${params}`);
   const detailed = await Promise.all(
     (payload.content || []).map(async (fixture) => {
-      if (fixture.status !== "C") return fixture;
-      return fetchFixtureDetail(fixture.id).catch(() => fixture);
+      if (!shouldFetchFixtureDetail(fixture)) return fixture;
+      return fetchFixtureDetail(fixture.id)
+        .then((detail) => mergeFixtureSummaryAndDetail(fixture, detail))
+        .catch(() => fixture);
     }),
   );
   return detailed.map((fixture) => normalizeFixture(fixture, competition.name, competition.id, seasonId));
 }
 
+function shouldFetchFixtureDetail(fixture) {
+  const code = String(fixture?.status || "").toUpperCase();
+  return ["C", "FT", "H", "HT", "I", "L", "LIVE", "1", "2", "E", "P"].includes(code) || isLineupWindow(fixture);
+}
+
 async function fetchFixtureDetail(fixtureId) {
   return fetchLiveJson(`/football/fixtures/${fixtureId}?altIds=true`);
+}
+
+function mergeFixtureSummaryAndDetail(summaryFixture, detailFixture) {
+  return {
+    ...summaryFixture,
+    ...detailFixture,
+    teams: detailFixture?.teams?.length ? detailFixture.teams : summaryFixture.teams,
+    goals: detailFixture?.goals?.length ? detailFixture.goals : summaryFixture.goals,
+    events: detailFixture?.events?.length ? detailFixture.events : summaryFixture.events,
+    teamLists: detailFixture?.teamLists?.length ? detailFixture.teamLists : summaryFixture.teamLists,
+    gameweek: detailFixture?.gameweek || summaryFixture.gameweek,
+    kickoff: detailFixture?.kickoff || summaryFixture.kickoff,
+    ground: detailFixture?.ground || summaryFixture.ground,
+    status: detailFixture?.status || summaryFixture.status,
+    phase: detailFixture?.phase || summaryFixture.phase,
+  };
+}
+
+function isLineupWindow(fixture) {
+  const kickoffMillis = Number(fixture?.kickoff?.millis ?? fixture?.timestamp);
+  if (!Number.isFinite(kickoffMillis)) return false;
+  const now = Date.now();
+  return kickoffMillis - now <= 60 * 60 * 1000 && kickoffMillis >= now - 4 * 60 * 60 * 1000;
 }
 
 async function findSeasonId(competition) {
@@ -1148,7 +1700,11 @@ function normalizeFixture(fixture, competitionName, competitionId, seasonId) {
       ? { home: fixture.teams[0].score, away: fixture.teams[1].score }
       : null;
   const playerNames = createPlayerNameMap(fixture);
-  const events = fixture.events || fixture.goals || [];
+  const fixtureGoalScorers = extractFixtureGoalScorers(fixture);
+  const fixtureGoalAssists = extractFixtureGoalAssists(fixture);
+  const detailGoalScorers = extractDetailGoalScorers(fixture, playerNames);
+  const detailGoalAssists = extractDetailGoalAssists(fixture, playerNames);
+  const lineups = extractLineups(fixture);
   const homeAway = competitionName === PRE_SEASON_NAME
     ? "neutral"
     : homeTeam?.id === UNITED.id
@@ -1161,7 +1717,11 @@ function normalizeFixture(fixture, competitionName, competitionId, seasonId) {
     date: fixture.kickoff?.label || "Date TBC",
     timestamp: fixture.kickoff?.millis || Number.MAX_SAFE_INTEGER,
     home: homeTeam?.name || "Home TBC",
+    homeTeamId: homeTeam?.id || null,
+    homeOpta: homeTeam?.altIds?.opta || (homeTeam?.id === UNITED.id ? UNITED.opta : null),
     away: awayTeam?.name || "Away TBC",
+    awayTeamId: awayTeam?.id || null,
+    awayOpta: awayTeam?.altIds?.opta || (awayTeam?.id === UNITED.id ? UNITED.opta : null),
     opponent: opponent?.name || "Opponent TBC",
     opponentShort: opponent?.shortName || "TBC",
     opponentAbbr: opponent?.club?.abbr || "TBC",
@@ -1174,50 +1734,186 @@ function normalizeFixture(fixture, competitionName, competitionId, seasonId) {
     competitionId,
     seasonId,
     status: fixture.status || "U",
+    phase:
+      fixture.phase ||
+      fixture.statusLabel ||
+      fixture.statusText ||
+      fixture.outcome ||
+      fixture.clock?.status ||
+      "",
+    clockLabel: fixture.clock?.label || fixture.timer?.label || fixture.minute?.label || "",
     score,
-    scorers: normalizeScorers(events, playerNames),
-    assists: normalizeAssists(events, playerNames),
+    scorers: detailGoalScorers.length ? detailGoalScorers : fixtureGoalScorers,
+    assists: detailGoalAssists.length ? detailGoalAssists : fixtureGoalAssists,
+    lineups,
   };
 }
 
 function createPlayerNameMap(fixture) {
   const map = new Map();
   (fixture.teamLists || []).forEach((teamList) => {
+    if (!teamList) return;
+    const teamId = teamList.team?.id || teamList.teamId || null;
     [...(teamList.lineup || []), ...(teamList.substitutes || [])].forEach((player) => {
-      if (player.id) map.set(player.id, player.name?.display || "Unknown player");
-      if (player.playerId) map.set(player.playerId, player.name?.display || "Unknown player");
+      const value = {
+        name: player.name?.display || "Unknown player",
+        teamId,
+      };
+      if (player.id !== undefined && player.id !== null) map.set(String(player.id), value);
+      if (player.playerId !== undefined && player.playerId !== null) map.set(String(player.playerId), value);
     });
   });
   return map;
 }
 
-function normalizeScorers(events, playerNames) {
-  return events
-    .filter((event) => event.type === "G" || event.description === "G")
-    .map((event) => {
-      const player = playerNames.get(event.personId) || `Player ${event.personId || "TBC"}`;
-      const minute = event.clock?.label ? ` ${event.clock.label}` : "";
-      return { label: `${player}${minute}` };
-    });
+function teamSideForEvent(fixture, teamId) {
+  if (!teamId) return null;
+  if (teamId === fixture.teams[0]?.team?.id) return "home";
+  if (teamId === fixture.teams[1]?.team?.id) return "away";
+  return null;
 }
 
-function normalizeAssists(events, playerNames) {
-  return events
-    .map((event) => {
-      const assistId =
-        event.assistPersonId || event.assist?.personId || event.assistedBy?.personId || null;
-      if (!assistId && !Array.isArray(event.assists)) return null;
-      const assistIds = Array.isArray(event.assists)
-        ? event.assists.map((assist) => assist.personId || assist.id).filter(Boolean)
-        : [assistId];
-      return assistIds.map((id) => {
-        const player = playerNames.get(id) || `Player ${id}`;
-        const minute = event.clock?.label ? ` ${event.clock.label}` : "";
-        return { label: `${player}${minute}` };
-      });
-    })
-    .flat()
-    .filter(Boolean);
+function firstNonEmptyValue(values) {
+  return values.find((value) => typeof value === "string" && value.trim()) || "";
+}
+
+function formatGoalMinute(source) {
+  const minuteValue =
+    source?.clock?.label ||
+    source?.minute?.label ||
+    source?.timeLabel ||
+    source?.label ||
+    source?.time ||
+    source?.minute ||
+    "";
+  const minuteText = String(minuteValue).trim();
+  if (!minuteText) return "";
+  return /['0-9]$/.test(minuteText) ? ` ${minuteText}` : ` ${minuteText}`;
+}
+
+function goalSide(goal, fixture) {
+  const teamId = goal?.team?.id || goal?.teamId || goal?.person?.currentTeam?.id || goal?.scorer?.currentTeam?.id || null;
+  return teamSideForEvent(fixture, teamId);
+}
+
+function normalizeGoalItem(name, side, minuteText) {
+  const trimmedName = String(name || "").trim();
+  if (!trimmedName || !side) return null;
+  return {
+    label: `${trimmedName}${minuteText}`,
+    side,
+  };
+}
+
+function dedupeEventItems(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${item.side}|${item.label}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function extractFixtureGoalScorers(fixture) {
+  return dedupeEventItems(
+    (fixture.goals || [])
+      .map((goal) => {
+        const name = firstNonEmptyValue([
+          goal?.person?.name?.display,
+          goal?.scorer?.name?.display,
+        ]);
+        return normalizeGoalItem(name, goalSide(goal, fixture), formatGoalMinute(goal));
+      })
+      .filter(Boolean),
+  );
+}
+
+function extractFixtureGoalAssists(fixture) {
+  return dedupeEventItems(
+    (fixture.goals || [])
+      .map((goal) => {
+        const name = firstNonEmptyValue([
+          goal?.assist?.name?.display,
+          goal?.assists?.[0]?.name?.display,
+        ]);
+        return normalizeGoalItem(name, goalSide(goal, fixture), formatGoalMinute(goal));
+      })
+      .filter(Boolean),
+  );
+}
+
+function extractDetailGoalScorers(fixture, playerNames) {
+  return dedupeEventItems(
+    (fixture.events || [])
+      .filter((event) => event.type === "G")
+      .map((event) => {
+        const entry = playerNames.get(String(event.personId));
+        const name = entry?.name || "";
+        const side = teamSideForEvent(fixture, entry?.teamId || event.teamId || event.team?.id);
+        return normalizeGoalItem(name, side, formatGoalMinute(event));
+      })
+      .filter(Boolean),
+  );
+}
+
+function extractDetailGoalAssists(fixture, playerNames) {
+  return dedupeEventItems(
+    (fixture.events || [])
+      .filter((event) => event.type === "G")
+      .map((event) => {
+        const assistEntry = playerNames.get(String(event.assistId));
+        const name = assistEntry?.name || "";
+        const side = teamSideForEvent(
+          fixture,
+          assistEntry?.teamId || event.teamId || event.team?.id,
+        );
+        return normalizeGoalItem(name, side, formatGoalMinute(event));
+      })
+      .filter(Boolean),
+  );
+}
+
+function extractLineups(fixture) {
+  if (!Array.isArray(fixture.teamLists) || fixture.teamLists.length < 2) return null;
+
+  const bySide = { home: null, away: null };
+  fixture.teamLists.forEach((teamList) => {
+    if (!teamList) return;
+    const side = teamSideForEvent(fixture, teamList.teamId);
+    if (!side) return;
+    bySide[side] = {
+      starting: normalizeSquadPlayers(teamList.lineup),
+      substitutes: normalizeSquadPlayers(teamList.substitutes),
+    };
+  });
+
+  return bySide.home || bySide.away ? bySide : null;
+}
+
+function normalizeSquadPlayers(players = []) {
+  return players
+    .map((player) => ({
+      name: player?.name?.display || "",
+      shirt: player?.matchShirtNumber ?? player?.info?.shirtNum ?? "",
+    }))
+    .filter((player) => player.name);
+}
+
+function fillLineupList(node, players) {
+  node.innerHTML = "";
+  (players || []).forEach((player) => {
+    const li = document.createElement("li");
+    li.className = "team-lineup-item";
+    li.title = player.name;
+    const shirt = document.createElement("strong");
+    shirt.textContent = player.shirt || "--";
+    const label = document.createElement("span");
+    label.textContent = player.name;
+    label.title = player.name;
+    li.append(shirt, label);
+    node.appendChild(li);
+  });
 }
 
 function mergeFixtures(fetched) {
@@ -1277,6 +1973,14 @@ completedToggle.addEventListener("click", () => {
 });
 
 refreshButton.addEventListener("click", () => refreshFixtures());
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && hasActiveLiveFixture()) {
+    refreshFixtures({ automatic: true });
+  } else {
+    syncLiveRefreshPolling();
+  }
+});
 
 function isPullRefreshAvailable() {
   return (
@@ -1343,6 +2047,7 @@ function setupPullToRefresh() {
 }
 
 setupPullToRefresh();
+initTeamModal();
 
 registerServiceWorker();
 

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "man-utd-fixtures-v1";
+const CACHE_VERSION = "man-utd-fixtures-v8";
 const APP_CACHE = `${CACHE_VERSION}-app`;
 const IMAGE_CACHE = `${CACHE_VERSION}-images`;
 

@@ -202,18 +202,18 @@
         <div class="teams">
           <div class="team">
             <span class="team-score"></span>
-            <span class="team-identity">
+            <button class="team-identity" type="button">
               <img alt="" />
               <span class="team-name"></span>
-            </span>
+            </button>
           </div>
           <span class="versus">vs</span>
           <div class="team">
             <span class="team-score"></span>
-            <span class="team-identity">
+            <button class="team-identity" type="button">
               <img alt="" />
               <span class="team-name"></span>
-            </span>
+            </button>
           </div>
         </div>
         <dl class="meta">
@@ -237,20 +237,45 @@
           </div>
           <div>
             <h3>Scorers</h3>
-            <ul class="scorers"></ul>
+            <div class="team-event-columns scorers"></div>
           </div>
           <div>
             <h3>Assists</h3>
-            <ul class="assists"></ul>
+            <div class="team-event-columns assists"></div>
           </div>
         </section>
       </article>
     </template>
 
+    <div class="team-modal" id="team-modal" hidden>
+      <div class="team-modal__backdrop" data-close-team-modal></div>
+      <div
+        class="team-modal__dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="team-modal-title"
+      >
+        <button
+          class="team-modal__close"
+          id="team-modal-close"
+          type="button"
+          aria-label="Close squad modal"
+        >
+          ×
+        </button>
+        <div class="team-modal__header">
+          <p class="team-modal__eyebrow" id="team-modal-eyebrow"></p>
+          <h2 id="team-modal-title">Squad</h2>
+          <p class="team-modal__subtitle" id="team-modal-subtitle"></p>
+        </div>
+        <div class="team-modal__body" id="team-modal-body"></div>
+      </div>
+    </div>
+
     <footer class="app-footer">
       <p class="attribution">This is an independent fan project. Fixture data sourced from Premier League. Manchester United is a registered trademark of Manchester United Football Club.</p>
     </footer>
 
-    <script src="app.js?v=daily-cache-20260623"></script>
+    <script src="app.js?v=local-squad-modal-20260724h"></script>
   </body>
 </html>
