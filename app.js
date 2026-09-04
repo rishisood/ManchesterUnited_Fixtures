@@ -40,7 +40,8 @@ const COMPETITIONS = [
     name: "UEFA Champions League",
     id: 2,
     seeded: false,
-    source: "Premier League/Pulse competition feed",
+    source: "football-data.org Champions League API",
+    liveSource: "football-data",
   },
   {
     name: "FA Cup",
@@ -139,10 +140,11 @@ function createPendingTournament(name, id, index) {
 
 const AUTO_REFRESH_ON_LOAD = true;
 const APP_STATE_CACHE_KEY = "man-utd-fixtures-state-v2";
-const APP_CACHE_SCHEMA_VERSION = 5;
+const APP_CACHE_SCHEMA_VERSION = 7;
 const APP_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const LIVE_API_ORIGIN = "https://footballapi.pulselive.com";
 const LIVE_API_PROXY = "/.netlify/functions/pl-api";
+const CHAMPIONS_LEAGUE_API_PROXY = "/.netlify/functions/ucl-api";
 const LIVE_REFRESH_INTERVAL_MS = 30000;
 const NEXT_MATCH_TICK_MS = 1000;
 const CHAMPIONS_LEAGUE_LOGO = "champions-league.svg";
@@ -201,6 +203,7 @@ const CHAMPIONS_LEAGUE_STANDINGS = [
 
 let fixtures = [...SEEDED_PRE_SEASON_FIXTURES, ...SEEDED_FIXTURES, ...PENDING_TOURNAMENTS];
 let standingsHistory = [{ gameweek: 0, entries: SEEDED_STANDINGS }];
+let championsLeagueStandings = { gameweek: null, roundLabel: "MD 0", entries: CHAMPIONS_LEAGUE_STANDINGS };
 let topScorer = null;
 let topAssister = null;
 let activeCompetition = defaultCompetition();
@@ -269,6 +272,7 @@ function createStandingEntry(position, name, shortName, id = null, opta = null, 
     goalsAgainst: stats.goalsAgainst ?? 0,
     gd: stats.gd ?? 0,
     points: stats.points ?? 0,
+    startingPosition: stats.startingPosition ?? null,
   };
 }
 
@@ -760,6 +764,7 @@ function renderTeamEventColumns(node, fixture, items) {
       crest: teamCrestUrl(
         fixture.home,
         fixture.homeOpta || (fixture.home === UNITED.name ? UNITED.opta : fixture.opponentOpta),
+        fixture.homeCrest || (fixture.home === fixture.opponent ? fixture.opponentCrest : ""),
       ),
     },
     {
@@ -767,6 +772,7 @@ function renderTeamEventColumns(node, fixture, items) {
       crest: teamCrestUrl(
         fixture.away,
         fixture.awayOpta || (fixture.away === UNITED.name ? UNITED.opta : fixture.opponentOpta),
+        fixture.awayCrest || (fixture.away === fixture.opponent ? fixture.opponentCrest : ""),
       ),
     },
   ];
@@ -815,16 +821,18 @@ function fillTeam(node, fixture, side) {
   const name = isHome ? fixture.home : fixture.away;
   const teamId = isHome ? fixture.homeTeamId : fixture.awayTeamId;
   const optaId = isHome ? fixture.homeOpta : fixture.awayOpta;
+  const apiCrest = isHome ? fixture.homeCrest : fixture.awayCrest;
   const score = isHome ? fixture.score?.home : fixture.score?.away;
   const lineup = fixture.lineups?.[side] || null;
   const img = node.querySelector("img");
   const scoreNode = node.querySelector(".team-score");
   const identityButton = node.querySelector(".team-identity");
   const nameNode = node.querySelector(".team-name");
-  img.src = teamCrestUrl(name, optaId);
+  img.src = teamCrestUrl(name, optaId, apiCrest);
   img.alt = `${name} crest`;
   img.loading = "lazy";
   img.onerror = () => {
+    img.onerror = null;
     img.src = crestUrl(null);
   };
   scoreNode.textContent = score === undefined || score === null ? "-" : String(score);
@@ -832,7 +840,8 @@ function fillTeam(node, fixture, side) {
   nameNode.textContent = name;
   nameNode.title = name;
 
-  const canOpenTeamModal = !fixture.pending && Number.isFinite(Number(teamId));
+  const canOpenTeamModal =
+    fixture.competition !== "UEFA Champions League" && !fixture.pending && Number.isFinite(Number(teamId));
   identityButton.disabled = !canOpenTeamModal;
   identityButton.classList.toggle("is-clickable", canOpenTeamModal);
   identityButton.title = canOpenTeamModal ? `Show ${name} squad details` : "";
@@ -936,6 +945,7 @@ function closeTeamModal() {
 }
 
 async function fetchLatestFixtureForModal(fixture) {
+  if (fixture.competition === "UEFA Champions League") return fixture;
   const detail = await fetchFixtureDetail(fixture.id);
   return normalizeFixture(detail, fixture.competition, fixture.competitionId, fixture.seasonId);
 }
@@ -1003,6 +1013,7 @@ function renderSquadPlayerItem(player) {
 }
 
 async function fetchTeamSquad(teamId, seasonId) {
+  if (String(teamId).startsWith("ucl-")) return [];
   const cacheKey = `${teamId}-${seasonId || "none"}`;
   if (squadCache.has(cacheKey)) return squadCache.get(cacheKey);
 
@@ -1096,8 +1107,8 @@ function escapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
-function teamCrestUrl(name, optaId) {
-  return TEAM_CREST_OVERRIDES[name] || crestUrl(optaId);
+function teamCrestUrl(name, optaId, apiCrest = "") {
+  return apiCrest || TEAM_CREST_OVERRIDES[name] || crestUrl(optaId);
 }
 
 function updateSummary(list) {
@@ -1219,14 +1230,14 @@ function latestStandings() {
 function renderLeagueTable() {
   const table =
     activeDashboardTable === "champions-league"
-      ? { gameweek: null, entries: CHAMPIONS_LEAGUE_STANDINGS }
+      ? championsLeagueStandings
       : latestStandings();
   const isChampionsLeague = activeDashboardTable === "champions-league";
   dashboardTableLabel.textContent = isChampionsLeague ? "Champions League" : "Premier League";
   dashboardTableLink.href = isChampionsLeague
     ? "https://www.uefa.com/uefachampionsleague/standings/"
     : "https://www.premierleague.com/en/tables";
-  tableRound.textContent = isChampionsLeague ? "MD 0" : `GW ${table.gameweek}`;
+  tableRound.textContent = isChampionsLeague ? table.roundLabel || "League phase" : `GW ${table.gameweek}`;
   tableBody.innerHTML = "";
 
   table.entries.forEach((entry) => {
@@ -1257,7 +1268,7 @@ function renderLeagueTable() {
 function standingCrestMarkup(entry) {
   const src = entry.crest || (entry.opta ? crestUrl(entry.opta) : CHAMPIONS_LEAGUE_LOGO);
   const alt = entry.name === "TBC" ? "Champions League logo" : `${entry.shortName} crest`;
-  return `<img src="${src}" alt="${alt}" loading="lazy" onerror="this.src='${CHAMPIONS_LEAGUE_LOGO}'" />`;
+  return `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" onerror="this.src='${CHAMPIONS_LEAGUE_LOGO}'" />`;
 }
 
 function unitedPositionHistory() {
@@ -1286,42 +1297,61 @@ function renderPositionChart() {
     return;
   }
 
-  const width = 560;
-  const height = 250;
-  const pad = 34;
-  const maxGw = Math.max(...history.map((point) => point.gameweek), 1);
-  const x = (gw) => pad + (gw / maxGw) * (width - pad * 2);
-  const y = (position) => pad + ((position - 1) / 19) * (height - pad * 2);
+  const width = 660;
+  const height = 420;
+  const chartLeft = 72;
+  const chartRight = 10;
+  const chartTop = 18;
+  const chartBottom = 44;
+  const gameweeks = history.map((point) => point.gameweek).filter((gameweek) => gameweek > 0);
+  const minGw = Math.min(...gameweeks, 1);
+  const maxGw = Math.max(...gameweeks, 1);
+  const gameweekRange = Math.max(maxGw - minGw, 1);
+  const x = (gw) => {
+    if (maxGw === minGw) return chartLeft + (width - chartLeft - chartRight) / 2;
+    return chartLeft + ((gw - minGw) / gameweekRange) * (width - chartLeft - chartRight);
+  };
+  const y = (position) => chartTop + ((position - 1) / 19) * (height - chartTop - chartBottom);
+  const yAxisLabels = Array.from({ length: 20 }, (_, index) => index + 1);
   const path = history
     .map((point, index) => `${index === 0 ? "M" : "L"} ${x(point.gameweek)} ${y(point.position)}`)
     .join(" ");
   const xAxisLabels = history
     .filter((point) => point.gameweek > 0)
     .filter((point) => point.gameweek === 1 || point.gameweek === maxGw || point.gameweek % 4 === 0);
-  const lastPoint = history[history.length - 1];
 
   positionChart.innerHTML = `
     <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Manchester United weekly league position">
-      <line x1="${pad}" y1="${pad}" x2="${pad}" y2="${height - pad}" stroke="#ddd6cb" />
-      <line x1="${pad}" y1="${height - pad}" x2="${width - pad}" y2="${height - pad}" stroke="#ddd6cb" />
-      <text x="4" y="${pad + 4}" font-size="12" fill="#706b63">1st</text>
-      <text x="0" y="${height - pad + 4}" font-size="12" fill="#706b63">20th</text>
+      <line x1="${chartLeft}" y1="${chartTop}" x2="${chartLeft}" y2="${height - chartBottom}" stroke="#ddd6cb" />
+      <line x1="${chartLeft}" y1="${height - chartBottom}" x2="${width - chartRight}" y2="${height - chartBottom}" stroke="#ddd6cb" />
+      ${yAxisLabels
+        .map((position) => {
+          const yPos = y(position);
+          return `
+            <line x1="${chartLeft}" y1="${yPos}" x2="${width - chartRight}" y2="${yPos}" stroke="#eee8df" stroke-width="0.7" />
+            <line x1="${chartLeft - 4}" y1="${yPos}" x2="${chartLeft}" y2="${yPos}" stroke="#706b63" />
+            <text x="${chartLeft - 10}" y="${yPos + 4}" text-anchor="end" font-size="12" fill="#706b63">Pos ${position}</text>
+          `;
+        })
+        .join("")}
       ${xAxisLabels
         .map(
           (point) => `
-            <line x1="${x(point.gameweek)}" y1="${height - pad}" x2="${x(point.gameweek)}" y2="${height - pad + 5}" stroke="#706b63" />
+            <line x1="${x(point.gameweek)}" y1="${height - chartBottom}" x2="${x(point.gameweek)}" y2="${height - chartBottom + 5}" stroke="#706b63" />
             <text x="${x(point.gameweek)}" y="${height - 8}" text-anchor="middle" font-size="10" fill="#706b63">GW${point.gameweek}</text>
           `,
         )
         .join("")}
       <path d="${path}" fill="none" stroke="#c70101" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
       ${history
-        .slice(0, -1)
-        .map((point) => `<circle cx="${x(point.gameweek)}" cy="${y(point.position)}" r="5" fill="#c70101"><title>GW ${point.gameweek}: ${point.position}</title></circle>`)
+        .map(
+          (point) => `
+            <image href="${crestUrl(UNITED.opta, 70)}" x="${x(point.gameweek) - 11}" y="${y(point.position) - 11}" width="22" height="22">
+              <title>GW ${point.gameweek}: ${point.position}</title>
+            </image>
+          `,
+        )
         .join("")}
-      <image href="${crestUrl(UNITED.opta, 70)}" x="${x(lastPoint.gameweek) - 13}" y="${y(lastPoint.position) - 13}" width="26" height="26">
-        <title>GW ${lastPoint.gameweek}: ${lastPoint.position}</title>
-      </image>
     </svg>
   `;
 }
@@ -1373,6 +1403,7 @@ function currentAppState() {
   return {
     fixtures,
     standingsHistory,
+    championsLeagueStandings,
     topScorer,
     topAssister,
   };
@@ -1383,6 +1414,9 @@ function applyAppState(state) {
   standingsHistory = Array.isArray(state.standingsHistory) && state.standingsHistory.length
     ? state.standingsHistory
     : standingsHistory;
+  championsLeagueStandings = state.championsLeagueStandings?.entries?.length
+    ? state.championsLeagueStandings
+    : championsLeagueStandings;
   topScorer = state.topScorer || topScorer;
   topAssister = state.topAssister || topAssister;
   syncDefaultCompetition();
@@ -1477,16 +1511,22 @@ async function refreshFixtures({ automatic = false } = {}) {
   let shouldRender = false;
 
   try {
-    const [fetchedGroups, fetchedStandings, fetchedTopScorer, fetchedTopAssister] = await Promise.all([
-      Promise.all(COMPETITIONS.map(fetchCompetitionFixtures)),
+    const [fetchedGroups, fetchedStandings, fetchedTopScorer, fetchedTopAssister, fetchedChampionsLeague] = await Promise.all([
+      Promise.all(COMPETITIONS.filter((competition) => competition.liveSource !== "football-data").map(fetchCompetitionFixtures)),
       fetchStandings(),
       fetchTopScorer(),
       fetchTopAssister(),
+      fetchChampionsLeagueData(),
     ]);
-    const fetched = fetchedGroups.flat();
+    const fetched = [...fetchedGroups.flat(), ...(fetchedChampionsLeague?.fixtures || [])];
     const nextState = {
       fixtures: mergeFixtures(fetched),
-      standingsHistory: fetchedStandings.length ? fetchedStandings : standingsHistory,
+      standingsHistory: fetchedStandings.length
+        ? mergeStandingsHistory(standingsHistory, fetchedStandings)
+        : standingsHistory,
+      championsLeagueStandings: fetchedChampionsLeague?.standings?.entries?.length
+        ? fetchedChampionsLeague.standings
+        : championsLeagueStandings,
       topScorer: fetchedTopScorer || topScorer,
       topAssister: fetchedTopAssister || topAssister,
     };
@@ -1549,30 +1589,93 @@ function liveFetchAttempts(liveUrl) {
   return [liveUrl];
 }
 
+async function fetchChampionsLeagueData() {
+  if (window.location.protocol !== "http:" && window.location.protocol !== "https:") return null;
+
+  try {
+    const response = await fetch(CHAMPIONS_LEAGUE_API_PROXY);
+    if (!response.ok) return null;
+    const payload = await response.json();
+    return {
+      fixtures: Array.isArray(payload.fixtures) ? payload.fixtures : [],
+      standings: payload.standings?.entries?.length
+        ? payload.standings
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function fetchStandings() {
   const payload = await fetchLiveJson("/football/standings?comps=1&compSeasons=841&altIds=true");
-  return (payload.tables || []).map((table) => ({
-    gameweek: table.gameWeek || 0,
-    entries: (table.entries || []).map((entry) =>
-      createStandingEntry(
-        entry.position,
-        entry.team?.name || "Unknown club",
-        entry.team?.shortName || entry.team?.name || "Unknown",
-        entry.team?.id,
-        entry.team?.altIds?.opta,
-        {
-          played: entry.overall?.played ?? 0,
-          won: entry.overall?.won ?? entry.overall?.wins ?? 0,
-          drawn: entry.overall?.drawn ?? entry.overall?.draws ?? 0,
-          lost: entry.overall?.lost ?? entry.overall?.losses ?? 0,
-          goalsFor: entry.overall?.goalsFor ?? entry.overall?.goalsScored ?? 0,
-          goalsAgainst: entry.overall?.goalsAgainst ?? entry.overall?.goalsConceded ?? 0,
-          gd: entry.overall?.goalsDifference ?? 0,
-          points: entry.overall?.points ?? 0,
-        },
-      ),
-    ),
-  }));
+  return normalizePremierLeagueStandings(payload.tables || []);
+}
+
+function normalizePremierLeagueStandings(tables) {
+  return tables
+    .flatMap((table) => {
+      const entries = (table.entries || []).map((entry) =>
+        createStandingEntry(
+          entry.position,
+          entry.team?.name || "Unknown club",
+          entry.team?.shortName || entry.team?.name || "Unknown",
+          entry.team?.id,
+          entry.team?.altIds?.opta,
+          {
+            played: entry.overall?.played ?? 0,
+            won: entry.overall?.won ?? entry.overall?.wins ?? 0,
+            drawn: entry.overall?.drawn ?? entry.overall?.draws ?? 0,
+            lost: entry.overall?.lost ?? entry.overall?.losses ?? 0,
+            goalsFor: entry.overall?.goalsFor ?? entry.overall?.goalsScored ?? 0,
+            goalsAgainst: entry.overall?.goalsAgainst ?? entry.overall?.goalsConceded ?? 0,
+            gd: entry.overall?.goalsDifference ?? 0,
+            points: entry.overall?.points ?? 0,
+            startingPosition: entry.startingPosition ?? null,
+          },
+        ),
+      );
+      const gameweek = effectiveTableGameweek(table, entries);
+      const history = [];
+
+      if (gameweek > 1 && entries.some((entry) => Number.isFinite(Number(entry.startingPosition)))) {
+        history.push({
+          gameweek: gameweek - 1,
+          entries: entries.map((entry) => ({
+            ...entry,
+            position: Number.isFinite(Number(entry.startingPosition))
+              ? Number(entry.startingPosition)
+              : entry.position,
+          })),
+        });
+      }
+
+      history.push({ gameweek, entries });
+      return history;
+    })
+    .sort((a, b) => a.gameweek - b.gameweek);
+}
+
+function effectiveTableGameweek(table, entries) {
+  const apiGameweek = Number(table.gameWeek);
+  if (Number.isFinite(apiGameweek) && apiGameweek > 0) return apiGameweek;
+  return Math.max(...entries.map((entry) => Number(entry.played) || 0), 0);
+}
+
+function mergeStandingsHistory(currentHistory, fetchedHistory) {
+  const fetchedHasStartedSeason = fetchedHistory.some((table) => Number(table.gameweek) > 0);
+  const byGameweek = new Map();
+
+  currentHistory.forEach((table) => {
+    if (fetchedHasStartedSeason && Number(table.gameweek) === 0) return;
+    byGameweek.set(Number(table.gameweek) || 0, table);
+  });
+
+  fetchedHistory.forEach((table) => {
+    byGameweek.set(Number(table.gameweek) || 0, table);
+  });
+
+  return Array.from(byGameweek.values()).sort((a, b) => (Number(a.gameweek) || 0) - (Number(b.gameweek) || 0));
 }
 
 async function fetchTopScorer() {

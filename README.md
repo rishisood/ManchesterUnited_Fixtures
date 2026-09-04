@@ -30,6 +30,7 @@ A static web application for tracking Manchester United fixtures across the 2026
 - `styles.css` - responsive styling and dashboard layout.
 - `app.js` - fixture data, refresh logic, filters, dashboard rendering, and API normalization.
 - `netlify/functions/pl-api.js` - serverless proxy used to refresh Premier League/Pulse data without browser CORS blocks.
+- `netlify/functions/ucl-api.js` - serverless proxy used to refresh Champions League fixtures, standings, qualified teams, and crests from football-data.org.
 - `netlify.toml` - Netlify deployment config.
 - `restore-pre-*.ps1` - local rollback scripts from development checkpoints.
 
@@ -62,7 +63,11 @@ For a free deployment where live refresh works, use Netlify:
 3. Keep the publish directory as `.` and functions directory as `netlify/functions`.
 4. Deploy.
 
-The app automatically calls `/.netlify/functions/pl-api` before attempting the direct Premier League/Pulse API request.
+The app automatically calls `/.netlify/functions/pl-api` before attempting the direct Premier League/Pulse API request. Champions League refresh uses `/.netlify/functions/ucl-api` and needs this Netlify environment variable:
+
+```text
+FOOTBALL_DATA_TOKEN=your_football_data_org_token
+```
 
 ## Rollback
 
@@ -77,6 +82,7 @@ To undo the proxy-refresh changes locally, run:
 - Premier League/Pulse fixtures API.
 - Premier League/Pulse standings API.
 - Premier League/Pulse ranked player stats APIs.
+- football-data.org Champions League matches, standings, teams, and crest URLs.
 - Premier League crest and player-image CDN where available.
 
 Some tournament fixtures, scorers, assists, and player stats only appear once those feeds publish the relevant data.
